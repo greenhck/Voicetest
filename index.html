@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ruby & Aira Voice Test</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #111;
+      color: #fff;
+      text-align: center;
+      padding: 40px;
+    }
+    textarea {
+      width: 90%;
+      height: 100px;
+      margin-bottom: 20px;
+      font-size: 16px;
+      padding: 10px;
+      border-radius: 10px;
+    }
+    select, input, button {
+      font-size: 16px;
+      padding: 10px;
+      margin: 10px;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h2>🎙️ Ruby & Aira Voice Assistant Test</h2>
+  <textarea id="textInput" placeholder="यहाँ अपना text लिखें..."></textarea><br/>
+
+  <label>🎧 Voice:</label>
+  <select id="voiceSelect">
+    <option value="ruby">Ruby (Female - Lovely Hindi)</option>
+    <option value="aira">Aira (Male - Soft Hindi)</option>
+  </select><br/>
+
+  <label>🎚️ Pitch:</label>
+  <input type="range" id="pitch" min="0.5" max="2" value="1" step="0.1">
+  <span id="pitchVal">1</span><br/>
+
+  <label>🚀 Rate:</label>
+  <input type="range" id="rate" min="0.5" max="2" value="1" step="0.1">
+  <span id="rateVal">1</span><br/>
+
+  <button onclick="speak()">🔊 Speak</button>
+
+  <script>
+    const textInput = document.getElementById('textInput');
+    const voiceSelect = document.getElementById('voiceSelect');
+    const pitch = document.getElementById('pitch');
+    const rate = document.getElementById('rate');
+    const pitchVal = document.getElementById('pitchVal');
+    const rateVal = document.getElementById('rateVal');
+
+    pitch.oninput = () => pitchVal.textContent = pitch.value;
+    rate.oninput = () => rateVal.textContent = rate.value;
+
+    function speak() {
+      const msg = new SpeechSynthesisUtterance();
+      msg.text = textInput.value || "कृपया कुछ लिखें...";
+      msg.lang = "hi-IN"; // हिंदी
+
+      const selected = voiceSelect.value;
+      if (selected === "ruby") {
+        msg.pitch = 1.4;   // Lovely Female
+        msg.rate = parseFloat(rate.value);
+      } else {
+        msg.pitch = 0.8;   // Soft Male
+        msg.rate = parseFloat(rate.value);
+      }
+
+      msg.pitch = parseFloat(pitch.value);
+
+      window.speechSynthesis.speak(msg);
+    }
+  </script>
+</body>
+</html>
