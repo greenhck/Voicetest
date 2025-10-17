@@ -1,75 +1,426 @@
-give me full profesional and full fit for mobile. a coding for. and give me one by one file   Project: Paper Trading Website (Hybrid Setup)
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paper Trader - Indian Markets</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for better visual on history */
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background-color: rgba(107, 114, 128, 0.5); /* gray-500 */
+            border-radius: 3px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        /* Inter font setup */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50 flex flex-col">
 
-What We Create
+    <div id="app-container" class="w-full max-w-4xl mx-auto p-4 md:p-6 flex-grow">
+        <header class="mb-6">
+            <h1 class="text-3xl font-extrabold text-blue-800 text-center">Paper Trader 🇮🇳</h1>
+            <p class="text-center text-gray-500 mt-1">Simulated Trading (Post-Market P&L)</p>
+        </header>
 
-A browser-based paper trading platform for Indian stocks, futures, and options, designed for free usage, minimal backend, and post-market evaluation.
+        <!-- Navigation Tabs -->
+        <div class="flex border-b border-gray-200 mb-6 sticky top-0 bg-white z-10">
+            <button onclick="showTab('trade')" id="tab-trade" class="tab-button flex-1 py-3 text-sm font-semibold border-b-2 border-blue-600 text-blue-600 transition duration-150">Trade</button>
+            <button onclick="showTab('portfolio')" id="tab-portfolio" class="tab-button flex-1 py-3 text-sm font-medium text-gray-500 hover:text-blue-600 transition duration-150">Portfolio</button>
+            <button onclick="showTab('history')" id="tab-history" class="tab-button flex-1 py-3 text-sm font-medium text-gray-500 hover:text-blue-600 transition duration-150">History</button>
+        </div>
 
-How It Works
+        <!-- Trade Tab Content -->
+        <div id="tab-content-trade" class="tab-content bg-white p-4 md:p-6 rounded-xl shadow-lg">
+            <h2 class="text-xl font-bold mb-4 text-gray-800">New Order Entry</h2>
+            <form id="trade-form" class="space-y-4">
+                <div>
+                    <label for="symbol" class="block text-sm font-medium text-gray-700 mb-1">Symbol (e.g., RELIANCE, NIFTYFUT)</label>
+                    <input type="text" id="symbol" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 uppercase" required placeholder="TCS, HDFCBANK, NIFTY50">
+                </div>
+                <div>
+                    <label for="quantity" class="block text-sm font-medium text-gray-700 mb-1">Quantity / Lot Size</label>
+                    <input type="number" id="quantity" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required min="1" value="100">
+                </div>
+                <div>
+                    <label for="price" class="block text-sm font-medium text-gray-700 mb-1">Entry Price (Observed)</label>
+                    <input type="number" step="0.01" id="price" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required value="100.00">
+                </div>
+                <div>
+                    <label for="type" class="block text-sm font-medium text-gray-700 mb-1">Order Type</label>
+                    <select id="type" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        <option value="EQUITY">Equity</option>
+                        <option value="FUT">Futures</option>
+                        <option value="OPT">Options</option>
+                    </select>
+                </div>
 
-Manual Trading During Market Hours
+                <div class="flex space-x-4 pt-2">
+                    <button type="button" onclick="placeOrder('BUY')" class="flex-1 bg-green-600 text-white font-semibold py-3 rounded-xl shadow-md hover:bg-green-700 transition duration-200 transform hover:scale-[1.01]">
+                        BUY
+                    </button>
+                    <button type="button" onclick="placeOrder('SELL')" class="flex-1 bg-red-600 text-white font-semibold py-3 rounded-xl shadow-md hover:bg-red-700 transition duration-200 transform hover:scale-[1.01]">
+                        SELL
+                    </button>
+                </div>
+                <div id="message-box" class="mt-4 text-sm font-medium text-center hidden p-2 rounded-lg"></div>
+            </form>
+            <p class="text-xs text-center text-gray-400 mt-6">Orders are saved instantly in your browser (Local Storage).</p>
+        </div>
 
-You observe TradingView charts
+        <!-- Portfolio Tab Content -->
+        <div id="tab-content-portfolio" class="tab-content hidden bg-white p-4 md:p-6 rounded-xl shadow-lg">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-gray-800">Portfolio Summary</h2>
+                <button onclick="calculatePnl()" class="text-xs px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
+                    Update P&L
+                </button>
+            </div>
 
-Enter buy/sell orders manually in the website
+            <!-- Total P&L Card -->
+            <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6 rounded-lg">
+                <p class="text-sm font-medium text-blue-700">Calculated P&L (Simulated Close)</p>
+                <p id="total-pnl" class="text-3xl font-extrabold text-blue-800 mt-1">₹ 0.00</p>
+            </div>
 
-Orders stored in LocalStorage
+            <h3 class="text-lg font-semibold mb-3 text-gray-700">Current Positions</h3>
+            <div class="overflow-x-auto custom-scroll">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead>
+                        <tr>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Symbol</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
+                            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Avg. Price</th>
+                            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Close Price</th>
+                            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">P&L</th>
+                        </tr>
+                    </thead>
+                    <tbody id="portfolio-body" class="bg-white divide-y divide-gray-200">
+                        <!-- Positions will be injected here -->
+                    </tbody>
+                </table>
+            </div>
+            <p id="no-positions-msg" class="text-center text-gray-500 p-4 hidden">No open positions.</p>
+        </div>
 
-Daily Data Update After Market Close
+        <!-- History Tab Content -->
+        <div id="tab-content-history" class="tab-content hidden bg-white p-4 md:p-6 rounded-xl shadow-lg">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-gray-800">Trade History</h2>
+                <button onclick="clearAllTrades()" class="text-xs px-3 py-1 bg-gray-200 text-gray-700 rounded-lg hover:bg-red-500 hover:text-white transition">
+                    Clear All
+                </button>
+            </div>
+            <div class="overflow-x-auto h-96 custom-scroll">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead>
+                        <tr>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Act.</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Sym.</th>
+                            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
+                            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Price</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-body" class="bg-white divide-y divide-gray-200">
+                        <!-- History will be injected here -->
+                    </tbody>
+                </table>
+            </div>
+            <p id="no-history-msg" class="text-center text-gray-500 p-4 hidden">No trades recorded yet.</p>
+        </div>
 
-GitHub Actions fetches NSE/BSE daily CSV → converts to JSON → commits to repo
+    </div>
 
-Frontend fetches this daily JSON file
+    <footer class="text-center text-xs text-gray-400 p-4">
+        &copy; 2024 Paper Trading Platform. Data is simulated for demonstration.
+    </footer>
 
-Updates all trades with actual closing prices
+    <script>
+        // --- Core Application Logic ---
 
-Calculates portfolio value, P&L, positions
+        const STORAGE_KEY = 'paperTrades';
+        let currentTrades = [];
+        let currentTab = 'trade';
 
-Portfolio & Trade History
+        // Helper for formatting currency
+        const formatter = new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: 'INR',
+            minimumFractionDigits: 2,
+        });
 
-Track all trades, positions, profit/loss
+        // --- Data Handling ---
 
-Reset or archive at your discretion
+        /**
+         * Simulates fetching daily closing prices from the hypothetical JSON file.
+         * In a real deployment, this would fetch from a URL like:
+         * '/data/daily_data.json' or 'https://github.io/repo-name/data/daily_data.json'
+         * The structure is: { "RELIANCE": 2500.50, "TCS": 3800.75, ... }
+         * @returns {Promise<Object>} A promise resolving to the market data.
+         */
+        async function fetchDailyMarketData() {
+            // NOTE: In the live environment, you would use 'fetch(FILE_PATH)' here.
+            // This mock data simulates the result of the post-market update.
+            return {
+                "RELIANCE": 2850.50,
+                "TCS": 3750.00,
+                "HDFCBANK": 1500.25,
+                "NIFTY50": 23000.00,
+                "INFY": 1500.00,
+                "TATASTEEL": 175.00,
+                "NIFTYFUT": 23050.00 // Example for Futures
+            };
+        }
 
-Key Features
+        function saveTrades() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(currentTrades));
+            } catch (error) {
+                console.error("Error saving to LocalStorage:", error);
+                displayMessage("Error saving trade data. Please check browser permissions.", 'error');
+            }
+        }
 
-Manual buy/sell order entry
+        function loadTrades() {
+            try {
+                const data = localStorage.getItem(STORAGE_KEY);
+                currentTrades = data ? JSON.parse(data) : [];
+                currentTrades.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)); // Sort newest first
+                renderHistory();
+            } catch (error) {
+                console.error("Error loading from LocalStorage:", error);
+                currentTrades = [];
+            }
+        }
 
-Daily market data update via GitHub Actions (post-market)
+        // --- Trading Logic ---
 
-Portfolio summary & trade history
+        function placeOrder(action) {
+            const symbolInput = document.getElementById('symbol');
+            const quantityInput = document.getElementById('quantity');
+            const priceInput = document.getElementById('price');
+            const typeInput = document.getElementById('type');
+            const form = document.getElementById('trade-form');
 
-P&L calculation after market close
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
 
-Offline / free (browser only)
+            const symbol = symbolInput.value.trim().toUpperCase();
+            const quantity = parseInt(quantityInput.value, 10);
+            const price = parseFloat(priceInput.value);
+            const type = typeInput.value;
 
-Optional charts (can integrate TradingView snapshots)
+            if (quantity <= 0 || isNaN(price) || price <= 0) {
+                displayMessage("Quantity and Price must be positive values.", 'error');
+                return;
+            }
 
-Files / Structure
+            const trade = {
+                id: crypto.randomUUID(),
+                symbol: symbol,
+                quantity: quantity,
+                price: price,
+                action: action, // 'BUY' or 'SELL'
+                type: type,
+                timestamp: new Date().toISOString()
+            };
+
+            currentTrades.push(trade);
+            saveTrades();
+            renderHistory();
+            
+            // Clear form and show success
+            symbolInput.value = '';
+            quantityInput.value = '100';
+            priceInput.value = '100.00';
+            displayMessage(`${action} order for ${quantity} x ${symbol} @ ${formatter.format(price)} placed successfully!`, 'success');
+        }
+
+        function clearAllTrades() {
+            const confirmation = window.confirm("Are you sure you want to clear ALL trade history and portfolio positions? This action cannot be undone.");
+            if (confirmation) {
+                currentTrades = [];
+                saveTrades();
+                renderHistory();
+                calculatePnl(); // Recalculate portfolio to clear it
+                displayMessage("All trades cleared.", 'success');
+            }
+        }
+
+        // --- UI Rendering ---
+
+        function displayMessage(text, type) {
+            const msgBox = document.getElementById('message-box');
+            msgBox.textContent = text;
+            msgBox.className = 'mt-4 text-sm font-medium text-center p-3 rounded-lg block';
+            if (type === 'success') {
+                msgBox.classList.add('bg-green-100', 'text-green-800');
+            } else if (type === 'error') {
+                msgBox.classList.add('bg-red-100', 'text-red-800');
+            } else {
+                 msgBox.classList.add('bg-gray-100', 'text-gray-800');
+            }
+
+            setTimeout(() => {
+                msgBox.classList.add('hidden');
+            }, 5000);
+        }
+
+        function renderHistory() {
+            const historyBody = document.getElementById('history-body');
+            historyBody.innerHTML = '';
+            const noHistoryMsg = document.getElementById('no-history-msg');
+
+            if (currentTrades.length === 0) {
+                noHistoryMsg.classList.remove('hidden');
+                return;
+            }
+
+            noHistoryMsg.classList.add('hidden');
+
+            currentTrades.forEach(trade => {
+                const date = new Date(trade.timestamp);
+                const color = trade.action === 'BUY' ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50';
+
+                const row = `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-3 py-2 whitespace-nowrap text-xs text-gray-500">${trade.id.substring(0, 4)}...</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-xs text-gray-800">${date.toLocaleDateString()} ${date.toLocaleTimeString()}</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-xs font-semibold ${color}">${trade.action}</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-xs font-medium text-gray-800">${trade.symbol} (${trade.type})</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-xs text-right text-gray-800">${trade.quantity.toLocaleString()}</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-xs text-right text-gray-800">${formatter.format(trade.price)}</td>
+                    </tr>
+                `;
+                historyBody.insertAdjacentHTML('beforeend', row);
+            });
+        }
+
+        function showTab(tabId) {
+            currentTab = tabId;
+            // Hide all content and reset buttons
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-button').forEach(el => {
+                el.classList.remove('border-blue-600', 'text-blue-600', 'font-semibold');
+                el.classList.add('text-gray-500', 'font-medium', 'border-transparent');
+            });
+
+            // Show selected content and highlight button
+            document.getElementById(`tab-content-${tabId}`).classList.remove('hidden');
+            const selectedButton = document.getElementById(`tab-tab-${tabId}`);
+            if (selectedButton) {
+                selectedButton.classList.add('border-blue-600', 'text-blue-600', 'font-semibold');
+                selectedButton.classList.remove('text-gray-500', 'font-medium', 'border-transparent');
+            } else {
+                // Handle initial setup where buttons are selected by ID (e.g., 'tab-trade')
+                document.getElementById(`tab-${tabId}`).classList.add('border-blue-600', 'text-blue-600', 'font-semibold');
+                document.getElementById(`tab-${tabId}`).classList.remove('text-gray-500', 'font-medium', 'border-transparent');
+            }
+
+            // Recalculate P&L when switching to portfolio
+            if (tabId === 'portfolio') {
+                calculatePnl();
+            }
+        }
+
+        // --- Portfolio & P&L Calculation ---
+
+        async function calculatePnl() {
+            const marketData = await fetchDailyMarketData();
+            const positions = {};
+
+            if (currentTrades.length === 0) {
+                 document.getElementById('portfolio-body').innerHTML = '';
+                 document.getElementById('no-positions-msg').classList.remove('hidden');
+                 document.getElementById('total-pnl').textContent = formatter.format(0);
+                 return;
+            }
+
+            document.getElementById('no-positions-msg').classList.add('hidden');
+
+            // 1. Aggregate trades into positions
+            currentTrades.forEach(trade => {
+                const symbolKey = trade.symbol.toUpperCase();
+                if (!positions[symbolKey]) {
+                    positions[symbolKey] = {
+                        symbol: symbolKey,
+                        type: trade.type,
+                        netQuantity: 0,
+                        totalCost: 0, // Total value of all buys/sells
+                        totalQty: 0
+                    };
+                }
+
+                const multiplier = (trade.action === 'BUY' ? 1 : -1);
+                positions[symbolKey].netQuantity += trade.quantity * multiplier;
+                positions[symbolKey].totalCost += trade.quantity * trade.price * multiplier;
+                positions[symbolKey].totalQty += trade.quantity; // Sum of all traded quantity
+            });
+
+            const portfolioBody = document.getElementById('portfolio-body');
+            portfolioBody.innerHTML = '';
+            let totalPortfolioPnl = 0;
+
+            // 2. Calculate P&L for each position
+            Object.values(positions).forEach(pos => {
+                if (pos.netQuantity === 0) return; // Closed position
+
+                const closePrice = marketData[pos.symbol] || pos.price; // Use trade price if close data is missing
+                const avgPrice = pos.totalCost / pos.netQuantity;
+
+                // P&L = (Current Price - Avg. Price) * Net Quantity
+                const pnl = (closePrice - avgPrice) * pos.netQuantity;
+                totalPortfolioPnl += pnl;
+
+                const pnlColor = pnl >= 0 ? 'text-green-600' : 'text-red-600';
+                const pnlText = pnl >= 0 ? `+${formatter.format(pnl)}` : formatter.format(pnl);
+
+                const row = `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-800">${pos.symbol}</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-800">${pos.netQuantity.toLocaleString()}</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-800">${formatter.format(Math.abs(avgPrice))}</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-800">${formatter.format(closePrice)}</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-sm font-semibold text-right ${pnlColor}">${pnlText}</td>
+                    </tr>
+                `;
+                portfolioBody.insertAdjacentHTML('beforeend', row);
+            });
+
+            // 3. Update total P&L display
+            const totalPnlElement = document.getElementById('total-pnl');
+            totalPnlElement.textContent = formatter.format(totalPortfolioPnl);
+            totalPnlElement.classList.remove('text-blue-800', 'text-green-600', 'text-red-600');
+            if (totalPortfolioPnl > 0) {
+                totalPnlElement.classList.add('text-green-600');
+            } else if (totalPortfolioPnl < 0) {
+                totalPnlElement.classList.add('text-red-600');
+            } else {
+                totalPnlElement.classList.add('text-blue-800');
+            }
+        }
 
 
+        // --- Initialization ---
 
-paper-trading/
-
- ├─ index.html    -> Main UI (form, portfolio, history)  Styling Manual order handling, LocalStorage, frontend logic
-
- ├─ data/            -> Daily JSON market data (auto-updated by GitHub Actions)
-
- ├─ .github/
-
- │    └─ workflows/
-
- │         └─ daily-fetch.yml -> GitHub Actions workflow to fetch daily data
-
- └─ scripts/
-
-      └─ csv_to_json.js -> Convert NSE/BSE CSV → JSON for frontend
-
-Summary
-
-During Market: Manual trades
-
-After Market: Daily data loads → calculate portfolio & P&L
-
-Automation: GitHub Actions handles fetching/updating data
-
-Frontend Only: Works fully in browser, free
+        window.onload = function() {
+            loadTrades();
+            showTab(currentTab);
+        };
+    </script>
+</body>
+</html>
