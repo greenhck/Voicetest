@@ -1,0 +1,53 @@
+name: Daily Market Data Fetch
+
+on:
+  # Schedule to run every weekday (Mon-Fri) at 17:30 IST (approx 5 PM, assuming market close at 3:30 PM)
+  schedule:
+    - cron: '30 12 * * 1-5' # 12:30 UTC = 18:00 IST (adjust as needed for specific market close time + delay)
+
+jobs:
+  fetch_and_process_data:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Setup Node.js environment
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 3. Install required library (e.g., 'axios' for fetching, 'csv-parser' or similar)
+      - name: Install dependencies
+        run: npm install axios csv-parser # Adjust libraries as needed
+
+      # 4. Fetch NSE/BSE CSV data and save it (Requires a custom script, let's call it 'fetch_csv.js')
+      - name: Fetch and Process Data
+        # Replace this with a script that downloads the latest NSE/BSE Bhavcopy CSV
+        run: |
+          # Hypothetical command: 
+          # node scripts/fetch_csv.js 
+          # Assuming 'fetch_csv.js' downloads the CSV and pipes it to the conversion script
+          
+          # For this example, we'll run the conversion script directly, assuming data is already fetched/available
+          node scripts/csv_to_json_utility.js > data/daily_data.json
+          
+      # 5. Commit the updated JSON file
+      - name: Commit and Push changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Data: Update daily market closing prices"
+          files: "data/daily_data.json"
+          # Optional: Only commit if files changed
+          commit_options: '--no-verify --allow-empty'
+```
+
+### Explanation of the Process:
+
+1.  **Schedule:** The `cron` expression schedules the workflow to run on weekdays. The time needs careful adjustment for your local time zone relative to UTC.
+2.  **Conversion:** The script (`csv_to_json_utility.js`) reads the raw daily CSV data (which must be fetched by a preceding step) and transforms it into the simple `{"SYMBOL": CLOSE_PRICE}` JSON format the frontend needs.
+3.  **Commit:** The `git-auto-commit-action` commits the newly generated `data/daily_data.json` file back to the repository.
+4.  **Frontend Consumption:** Your `paper_trading.html` (if hosted on GitHub Pages) can then `fetch()` this `data/daily_data.json` file to update its P&L calculations.
