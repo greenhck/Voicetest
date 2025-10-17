@@ -1,81 +1,75 @@
-<!DOCTYPE html>
-<html lang="hi">
-<head>
-  <meta charset="UTF-8" />
-  <title>Ruby & Aira Voice Test</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      background-color: #111;
-      color: #fff;
-      text-align: center;
-      padding: 40px;
-    }
-    textarea {
-      width: 90%;
-      height: 100px;
-      margin-bottom: 20px;
-      font-size: 16px;
-      padding: 10px;
-      border-radius: 10px;
-    }
-    select, input, button {
-      font-size: 16px;
-      padding: 10px;
-      margin: 10px;
-      border-radius: 10px;
-    }
-  </style>
-</head>
-<body>
-  <h2>🎙️ Ruby & Aira Voice Assistant Test</h2>
-  <textarea id="textInput" placeholder="यहाँ अपना text लिखें..."></textarea><br/>
+give me full profesional and full fit for mobile. a coding for. and give me one by one file   Project: Paper Trading Website (Hybrid Setup)
 
-  <label>🎧 Voice:</label>
-  <select id="voiceSelect">
-    <option value="ruby">Ruby (Female - Lovely Hindi)</option>
-    <option value="aira">Aira (Male - Soft Hindi)</option>
-  </select><br/>
+What We Create
 
-  <label>🎚️ Pitch:</label>
-  <input type="range" id="pitch" min="0.5" max="2" value="1" step="0.1">
-  <span id="pitchVal">1</span><br/>
+A browser-based paper trading platform for Indian stocks, futures, and options, designed for free usage, minimal backend, and post-market evaluation.
 
-  <label>🚀 Rate:</label>
-  <input type="range" id="rate" min="0.5" max="2" value="1" step="0.1">
-  <span id="rateVal">1</span><br/>
+How It Works
 
-  <button onclick="speak()">🔊 Speak</button>
+Manual Trading During Market Hours
 
-  <script>
-    const textInput = document.getElementById('textInput');
-    const voiceSelect = document.getElementById('voiceSelect');
-    const pitch = document.getElementById('pitch');
-    const rate = document.getElementById('rate');
-    const pitchVal = document.getElementById('pitchVal');
-    const rateVal = document.getElementById('rateVal');
+You observe TradingView charts
 
-    pitch.oninput = () => pitchVal.textContent = pitch.value;
-    rate.oninput = () => rateVal.textContent = rate.value;
+Enter buy/sell orders manually in the website
 
-    function speak() {
-      const msg = new SpeechSynthesisUtterance();
-      msg.text = textInput.value || "कृपया कुछ लिखें...";
-      msg.lang = "hi-IN"; // हिंदी
+Orders stored in LocalStorage
 
-      const selected = voiceSelect.value;
-      if (selected === "ruby") {
-        msg.pitch = 1.4;   // Lovely Female
-        msg.rate = parseFloat(rate.value);
-      } else {
-        msg.pitch = 0.8;   // Soft Male
-        msg.rate = parseFloat(rate.value);
-      }
+Daily Data Update After Market Close
 
-      msg.pitch = parseFloat(pitch.value);
+GitHub Actions fetches NSE/BSE daily CSV → converts to JSON → commits to repo
 
-      window.speechSynthesis.speak(msg);
-    }
-  </script>
-</body>
-</html>
+Frontend fetches this daily JSON file
+
+Updates all trades with actual closing prices
+
+Calculates portfolio value, P&L, positions
+
+Portfolio & Trade History
+
+Track all trades, positions, profit/loss
+
+Reset or archive at your discretion
+
+Key Features
+
+Manual buy/sell order entry
+
+Daily market data update via GitHub Actions (post-market)
+
+Portfolio summary & trade history
+
+P&L calculation after market close
+
+Offline / free (browser only)
+
+Optional charts (can integrate TradingView snapshots)
+
+Files / Structure
+
+
+
+paper-trading/
+
+ ├─ index.html    -> Main UI (form, portfolio, history)  Styling Manual order handling, LocalStorage, frontend logic
+
+ ├─ data/            -> Daily JSON market data (auto-updated by GitHub Actions)
+
+ ├─ .github/
+
+ │    └─ workflows/
+
+ │         └─ daily-fetch.yml -> GitHub Actions workflow to fetch daily data
+
+ └─ scripts/
+
+      └─ csv_to_json.js -> Convert NSE/BSE CSV → JSON for frontend
+
+Summary
+
+During Market: Manual trades
+
+After Market: Daily data loads → calculate portfolio & P&L
+
+Automation: GitHub Actions handles fetching/updating data
+
+Frontend Only: Works fully in browser, free
