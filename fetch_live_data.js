@@ -1,123 +1,136 @@
 /**
- * Live Data Fetch Script (fetch_live_data.js)
- * * FINAL ATTEMPT to fetch real NIFTY 50 data directly from the NSE public endpoint.
- * * Uses a two-step fetch process and aggressive headers to bypass security checks.
+ * Daily Bhavcopy Fetch Script (fetch_live_data.js)
+ * * Fetches the complete daily closing data (Bhavcopy) from NSE India.
+ * * This fulfills the request for 'all information' updated 'once after market close' 
+ * * without relying on rate-limited APIs or fragile live scraping.
  */
 const fetch = require('node-fetch');
 const fs = require('fs');
+const zlib = require('zlib');
+const csvParser = require('csv-parser');
+const { Writable } = require('stream');
 
 // --- Configuration ---
-const NSE_API_URL = "https://www.nseindia.com/api/equity-stockIndices?index=NIFTY%2050"; 
-const NSE_BASE_URL = "https://www.nseindia.com"; 
 
-// --- Helper Functions ---
+// Function to calculate the date of the previous trading day (Mon-Fri)
+function getPreviousTradingDay() {
+    const date = new Date();
+    // Get time in IST (UTC + 5.5 hours) for accurate market close check
+    date.setUTCHours(date.getUTCHours() + 5); 
+    date.setUTCMinutes(date.getUTCMinutes() + 30);
+    
+    let day = date.getDay();
+    let diff = 1; // Default to yesterday
+    
+    if (day === 0) diff = 2; // If today is Sunday, go back 2 days (to Friday)
+    if (day === 6) diff = 1; // If today is Saturday, go back 1 day (to Friday)
+    
+    // Check if the market is open today (Mon-Fri) and it's before market close (3:30 PM IST)
+    const currentISTHour = date.getHours();
+    const currentISTMinute = date.getMinutes();
+    
+    // If it's a weekday and before 4:00 PM IST, use the day before yesterday's data 
+    // to ensure we get the fully processed closing Bhavcopy, especially early in the run.
+    if (day >= 1 && day <= 5 && (currentISTHour < 16)) { 
+        diff += 1;
+    }
+    
+    date.setDate(date.getDate() - diff);
+    
+    // Ensure we don't land on Sat or Sun
+    while (date.getDay() === 0 || date.getDay() === 6) {
+        date.setDate(date.getDate() - 1);
+    }
+    
+    return date;
+}
+
+function getBhavcopyUrl(date) {
+    const day = String(date.getDate()).padStart(2, '0');
+    const monthIndex = date.getMonth();
+    const year = date.getFullYear();
+    const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    const month = monthNames[monthIndex];
+    
+    // Example: cm18OCT2025bhav.csv.zip
+    const filename = `cm${day}${month}${year}bhav.csv.zip`;
+    // Using the archival URL which is generally more stable for direct download
+    return `https://www1.nseindia.com/content/historical/EQUITIES/${year}/${month}/${filename}`;
+}
+
+// --- Core Logic ---
+
+async function fetchAndProcessBhavcopy() {
+    const date = getPreviousTradingDay();
+    const bhavcopyUrl = getBhavcopyUrl(date);
+    const dateString = date.toLocaleDateString('en-IN');
+    
+    console.log(`Starting Bhavcopy Fetch for trading day: ${dateString}`);
+    console.log(`URL: ${bhavcopyUrl}`);
+
+    try {
+        const response = await fetch(bhavcopyUrl);
+        
+        if (!response.ok) {
+            console.error(`\nFATAL ERROR: Failed to fetch Bhavcopy from NSE. Status: ${response.status} (${response.statusText})`);
+            console.error("This usually happens if the file for the target date is not yet uploaded by NSE.");
+            process.exit(1);
+        }
+        
+        // 1. Unzip and Parse the CSV Stream
+        const allStockData = [];
+        
+        // Pipe the response stream through the unzipper and CSV parser
+        await new Promise((resolve, reject) => {
+            response.body
+                .pipe(zlib.createGunzip()) // Unzip the .zip (which is often GZipped content)
+                .pipe(csvParser())
+                .on('data', (data) => {
+                    // Filter for 'EQ' series (Equity) and process
+                    if (data.SERIES === 'EQ' && data.SYMBOL) {
+                        const close = parseFloat(data.CLOSE);
+                        const prevClose = parseFloat(data.PREVCLOSE);
+                        const todayChange = close - prevClose;
+                        const changePercent = (todayChange / prevClose) * 100;
+
+                        allStockData.push({
+                            name: data.SYMBOL + ' Ltd.', // Placeholder name, as Bhavcopy lacks full name
+                            symbol: data.SYMBOL,
+                            indices: data.SERIES,
+                            currentPrice: close.toFixed(2),
+                            todayChange: todayChange.toFixed(2),
+                            changePercent: changePercent.toFixed(2),
+                            holdings: generateMockHoldings(data.SYMBOL)
+                        });
+                    }
+                })
+                .on('end', resolve)
+                .on('error', (err) => {
+                    console.error("CSV or GZIP parsing error:", err.message);
+                    reject(err);
+                });
+        });
+        
+        if (allStockData.length === 0) {
+            console.error("FATAL ERROR: Parsed data, but found zero 'EQ' (Equity) stock entries.");
+            process.exit(1);
+        }
+
+        // 2. Write the JSON file
+        fs.writeFileSync('marketdata.json', JSON.stringify(allStockData, null, 2));
+        console.log(`\n✅ Success! Saved ${allStockData.length} REAL Equity stocks from Bhavcopy dated ${dateString}.`);
+
+    } catch (error) {
+        console.error(`\nFATAL ERROR: An unexpected error occurred: ${error.message}`);
+        process.exit(1);
+    }
+}
 
 const generateMockHoldings = (symbol) => {
-    // We retain this mock function as the holdings data is not part of the NSE API response
+    // Retained mock function
     const rand = Math.floor(Math.random() * 5);
     if (rand === 0) return 0;
     return rand * 10; 
 };
 
-// --- Core Logic ---
-
-async function fetchAndProcessData() {
-    console.log("Starting FINAL attempt to fetch REAL NIFTY 50 data from NSE...");
-
-    let processedStocks = [];
-    let cookies = '';
-    
-    // --- Step 1: Initial Fetch to get Cookies ---
-    console.log("Step 1: Attempting to retrieve session cookies...");
-    
-    try {
-        const initialResponse = await fetch(NSE_BASE_URL, {
-            method: 'GET',
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.9',
-            }
-        });
-        
-        // Use .raw() to retrieve all 'set-cookie' headers reliably (Fix for node-fetch)
-        const cookieHeaders = initialResponse.headers.raw()['set-cookie'];
-        
-        if (cookieHeaders && cookieHeaders.length > 0) {
-            const allCookies = cookieHeaders.join('; ');
-            cookies = allCookies.split(';').filter(cookie => 
-                cookie.trim().startsWith('JSESSIONID') || cookie.trim().startsWith('bm_sv')
-            ).join('; ');
-        }
-        
-    } catch (error) {
-        console.error(`ERROR: Step 1 (Cookie Fetch) failed: ${error.message}`);
-    }
-    
-    // --- Step 2: Data Fetch using the Retrieved Cookies ---
-    
-    if (!cookies) {
-        console.error("\nFATAL ERROR: Could not retrieve necessary cookies. NSE fetch cannot proceed.");
-        console.error("Please use a paid, stable API service if real-time data is mandatory.");
-        process.exit(1); // Exit with error if cookies are missing (as requested: no fake data)
-    }
-
-    console.log("Step 2: Cookies retrieved. Attempting final REAL data fetch...");
-    
-    const requestOptions = {
-        method: 'GET',
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Connection': 'keep-alive',
-            'Accept': '*/*',
-            'Referer': 'https://www.nseindia.com/market-data/live-equity-stock-watch',
-            'Host': 'www.nseindia.com',
-            // CRUCIAL: Pass the retrieved cookies here
-            'Cookie': cookies 
-        }
-    };
-
-    try {
-        const response = await fetch(NSE_API_URL, requestOptions);
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`\nFATAL ERROR: Final NSE fetch failed with status: ${response.status} (${response.statusText})`);
-            console.error(`Server Response Body (Partial): ${errorText.substring(0, 100)}...`);
-            process.exit(1); // Exit with error
-        }
-
-        const data = await response.json();
-        
-        // --- Data Processing (Real NSE data structure expected) ---
-        if (!data.data || !Array.isArray(data.data)) {
-            console.error("FATAL ERROR: NSE returned data, but the structure was unexpected.");
-            process.exit(1); 
-        }
-
-        processedStocks = data.data.filter(item => item.identifier && item.symbol).map(stock => ({
-            name: stock.meta?.companyName || stock.symbol, 
-            symbol: stock.symbol,                                          
-            indices: 'NIFTY 50',                       
-            currentPrice: parseFloat(stock.lastPrice).toFixed(2),
-            todayChange: parseFloat(stock.change).toFixed(2),
-            changePercent: parseFloat(stock.pChange).toFixed(2), 
-            holdings: generateMockHoldings(stock.symbol)
-        }));
-        
-        if (processedStocks.length === 0) {
-            console.error("FATAL ERROR: Fetch succeeded, but zero stock entries were found in the data.");
-            process.exit(1);
-        }
-
-        fs.writeFileSync('marketdata.json', JSON.stringify(processedStocks, null, 2));
-        console.log(`\n✅ Success! Successfully fetched and saved ${processedStocks.length} REAL NIFTY 50 stocks to marketdata.json.`);
-
-    } catch (error) {
-        console.error(`\nFATAL ERROR: An unexpected error occurred during data processing: ${error.message}`);
-        process.exit(1);
-    }
-}
-
-fetchAndProcessData();
+fetchAndProcessBhavcopy();
