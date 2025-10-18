@@ -1,106 +1,76 @@
 /**
  * Live Data Fetch Script (fetch_live_data.js)
- * * This script is intended to run via GitHub Actions. It fetches live market data
- * using the provided API key and saves the processed data into marketdata.json.
- * * IMPORTANT: This uses 'node-fetch' which must be installed via 'npm install node-fetch'.
+ * Fetches Nifty 50 stock data directly from an NSE public JSON endpoint (no API key needed).
+ * Saves the processed data into marketdata.json.
  */
 const fetch = require('node-fetch');
 const fs = require('fs');
 
 // --- Configuration ---
-// The API Key is passed via GitHub Secrets (STOCK_MARKET_API environment variable)
-const API_KEY = process.env.STOCK_MARKET_API;
-
-// API Endpoint (Using /stock as confirmed)
-const BASE_API_URL = "https://stock.indianapi.in/stock"; 
-
-// List of stock names to query (as the API uses 'name' parameter)
-// NOTE: These names must exactly match what the API expects for best results.
-const STOCK_NAMES = [
-    { name: 'Tata Consultancy Services', symbol: 'TCS' },
-    { name: 'Reliance Industries', symbol: 'RELIANCE' },
-    { name: 'Infosys', symbol: 'INFY' },
-    { name: 'HDFC Bank', symbol: 'HDFC' },
-    { name: 'ICICI Bank', symbol: 'ICICIBANK' }
-]; 
+// Using NSE India's public endpoint for Nifty 50 index
+const NSE_API_URL = "https://www.nseindia.com/api/equity-stockIndices?index=NIFTY%2050"; 
+// No API_KEY needed for this setup
 
 // --- Core Logic ---
 
 // Helper function to create mock holdings
 const generateMockHoldings = (symbol) => {
+    // Generate a random holding count for a better demonstration of the UI
     const rand = Math.floor(Math.random() * 5);
     if (rand === 0) return 0;
     return rand * 10; 
 };
 
 async function fetchAndProcessData() {
-    console.log("Starting to fetch live stock data...");
+    console.log("Starting to fetch live NIFTY 50 stock data from NSE...");
 
-    if (!API_KEY) {
-        console.error("FATAL ERROR: STOCK_MARKET_API environment variable is not set. Please check GitHub Secrets.");
-        process.exit(1);
-    }
-    
-    const processedStocks = [];
-
-    // Looping through each stock name to fetch data individually (API requirement)
-    for (const stock of STOCK_NAMES) {
-        // 1. Construct URL with 'name' parameter
-        const url = `${BASE_API_URL}?name=${encodeURIComponent(stock.name)}`;
-
-        // 2. Send API Key inside HTTP Headers
-        const requestOptions = {
-            method: 'GET',
-            headers: {
-                'X-API-KEY': API_KEY, 
-                'Content-Type': 'application/json'
-            }
-        };
-
-        try {
-            console.log(`Attempting to fetch data for: ${stock.name} (${stock.symbol})`);
-            const response = await fetch(url, requestOptions); 
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error(`- Error for ${stock.name}: Status ${response.status} (${response.statusText})`);
-                console.error(`- Server Response: ${errorText}`);
-                continue; // Skip to the next stock if current one fails
-            }
-
-            const data = await response.json();
-            
-            // --- Data Processing (Assuming the API returns the stock object directly) ---
-            if (data && typeof data === 'object' && !Array.isArray(data)) {
-                // Ensure to replace placeholder keys with the ACTUAL keys from your API response
-                const currentPrice = data.lastPrice || 0;
-                const changeValue = data.change || 0; 
-                
-                processedStocks.push({
-                    name: stock.name,                                            
-                    symbol: stock.symbol,                                          
-                    indices: data.instrumentType || 'Equity',                       
-                    currentPrice: parseFloat(currentPrice).toFixed(2),
-                    todayChange: parseFloat(changeValue).toFixed(2),
-                    // Re-calculating percentage change
-                    changePercent: ((changeValue / (currentPrice - changeValue)) * 100).toFixed(2), 
-                    holdings: generateMockHoldings(stock.symbol)
-                });
-            } else {
-                console.error(`- Data structure for ${stock.name} was unexpected.`);
-            }
-
-        } catch (error) {
-            console.error(`An error occurred while fetching ${stock.name}: ${error.message}`);
+    // Common headers to mimic a browser request (required by NSE)
+    const requestOptions = {
+        method: 'GET',
+        headers: {
+            // These headers are essential for accessing NSE's public APIs
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
         }
-    }
-    
-    // --- Final Step: Write to File ---
-    if (processedStocks.length > 0) {
+    };
+
+    try {
+        const response = await fetch(NSE_API_URL, requestOptions);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`An error occurred during NSE fetch. Status: ${response.status} (${response.statusText})`);
+            console.error(`Server Response Body: ${errorText}`);
+            throw new Error(`NSE fetch failed with status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        // --- Data Processing ---
+        // NSE API returns the main data in 'data' field, and we filter out non-stock entries.
+        const stockData = data.data.filter(item => item.identifier && item.symbol);
+        
+        const processedStocks = stockData.map(stock => {
+            
+            return {
+                name: stock.meta.companyName,
+                symbol: stock.symbol,                                          
+                indices: 'NIFTY 50',                       
+                currentPrice: parseFloat(stock.lastPrice).toFixed(2),
+                todayChange: parseFloat(stock.change).toFixed(2),
+                changePercent: parseFloat(stock.pChange).toFixed(2), 
+                holdings: generateMockHoldings(stock.symbol)
+            };
+        });
+
+        // Write the processed data to the marketdata.json file
         fs.writeFileSync('marketdata.json', JSON.stringify(processedStocks, null, 2));
         console.log(`\n✅ Successfully fetched and saved ${processedStocks.length} stocks to marketdata.json.`);
-    } else {
-        console.error("\n❌ No stock data was successfully fetched. marketdata.json was not updated.");
+
+    } catch (error) {
+        console.error(`An error occurred during data processing: ${error.message}`);
         process.exit(1);
     }
 }
