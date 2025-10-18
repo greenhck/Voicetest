@@ -9,7 +9,6 @@ const fs = require('fs');
 // --- Configuration ---
 // Using NSE India's public endpoint for Nifty 50 index
 const NSE_API_URL = "https://www.nseindia.com/api/equity-stockIndices?index=NIFTY%2050"; 
-// No API_KEY needed for this setup
 
 // --- Core Logic ---
 
@@ -24,15 +23,17 @@ const generateMockHoldings = (symbol) => {
 async function fetchAndProcessData() {
     console.log("Starting to fetch live NIFTY 50 stock data from NSE...");
 
-    // Common headers to mimic a browser request (required by NSE)
+    // FIX: Added required headers to bypass NSE security checks
     const requestOptions = {
         method: 'GET',
         headers: {
-            // These headers are essential for accessing NSE's public APIs
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Accept-Language': 'en-US,en;q=0.9',
             'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
+            'Accept': '*/*', // Added Accept header
+            'Referer': 'https://www.nseindia.com/market-data/live-equity-stock-watch', // Crucial Referer header
+            'Host': 'www.nseindia.com' // Crucial Host header
         }
     };
 
@@ -42,14 +43,13 @@ async function fetchAndProcessData() {
         if (!response.ok) {
             const errorText = await response.text();
             console.error(`An error occurred during NSE fetch. Status: ${response.status} (${response.statusText})`);
-            console.error(`Server Response Body: ${errorText}`);
+            console.error(`Server Response Body: ${errorText.substring(0, 100)}... (truncated)`); // Truncate HTML for clean log
             throw new Error(`NSE fetch failed with status: ${response.status}`);
         }
 
         const data = await response.json();
         
         // --- Data Processing ---
-        // NSE API returns the main data in 'data' field, and we filter out non-stock entries.
         const stockData = data.data.filter(item => item.identifier && item.symbol);
         
         const processedStocks = stockData.map(stock => {
@@ -65,7 +65,6 @@ async function fetchAndProcessData() {
             };
         });
 
-        // Write the processed data to the marketdata.json file
         fs.writeFileSync('marketdata.json', JSON.stringify(processedStocks, null, 2));
         console.log(`\n✅ Successfully fetched and saved ${processedStocks.length} stocks to marketdata.json.`);
 
