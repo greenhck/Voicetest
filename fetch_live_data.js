@@ -11,8 +11,8 @@ const fs = require('fs');
 // The API Key is passed via GitHub Secrets (STOCK_MARKET_API environment variable)
 const API_KEY = process.env.STOCK_MARKET_API;
 
-// FINAL FIX: Changed subdomain from 'api.indianapi.in' to 'stock.indianapi.in' based on documentation.
-const BASE_API_URL = "https://stock.indianapi.in/latest-quotes"; 
+// FIX ATTEMPT: Changed endpoint path to a more standard '/v1/quotes'
+const BASE_API_URL = "https://stock.indianapi.in/v1/quotes"; 
 
 // List of sample symbols to query from the API
 const SAMPLE_SYMBOLS = ['TCS', 'RELIANCE', 'INFY', 'HDFC', 'ICICIBANK']; 
@@ -36,13 +36,14 @@ async function fetchAndProcessData() {
     }
     
     // 1. Send Symbols as Query Parameter
+    // Note: If the API requires symbols as a list in the body, this needs to be changed.
     const url = `${BASE_API_URL}?symbols=${SAMPLE_SYMBOLS.join(',')}`;
 
-    // 2. Send API Key inside HTTP Headers (Common for secure APIs)
+    // 2. Send API Key inside HTTP Headers (ApiKeyAuth standard)
     const requestOptions = {
         method: 'GET',
         headers: {
-            // Using X-API-KEY header to securely pass the key
+            // Using X-API-KEY header as previously determined
             'X-API-KEY': API_KEY, 
             'Content-Type': 'application/json'
         }
@@ -51,33 +52,38 @@ async function fetchAndProcessData() {
 
     try {
         console.log(`Attempting to fetch data from: ${url}`);
-        // NOTE: The API key is now in the requestOptions, not the URL.
         const response = await fetch(url, requestOptions); 
 
         // Check for common HTTP error status codes (4xx and 5xx)
         if (!response.ok) {
-            // Read and log the response body to understand WHY the server sent 404
+            // Read and log the response body to understand WHY the server failed
             const errorText = await response.text();
             console.error(`An error occurred during API fetch. Status: ${response.status} (${response.statusText})`);
             console.error(`Server Response Body (Reason for Error): ${errorText}`);
+            
+            // Check for specific error status 403 (Forbidden) if API key fails
+            if (response.status === 403) {
+                console.error("DEBUG HINT: 403 status often means the API Key is rejected or expired.");
+            }
+
             throw new Error(`API fetch failed with status: ${response.status}`);
         }
 
         const data = await response.json();
         
-        // --- Data Processing (Adjust based on actual API response structure) ---
-        // Assuming 'data' is an array of stock objects from the API
+        // --- Data Processing (Assuming API returns an array of stock objects) ---
         const processedStocks = data.map(stock => {
-            // Replace these placeholder keys with the actual keys from your indianapi.in response
+            // Placeholder keys are used here; adjust these based on the ACTUAL keys in the successful API response
             const currentPrice = stock.lastPrice || 0;
             const changeValue = stock.change || 0; 
             
             return {
-                name: stock.symbol,                                             // e.g., "TCS"
-                indices: stock.instrumentType || 'Equity',                       // e.g., "NSE"
+                name: stock.symbol,                                             
+                indices: stock.instrumentType || 'Equity',                       
                 currentPrice: parseFloat(currentPrice).toFixed(2),
                 todayChange: parseFloat(changeValue).toFixed(2),
-                changePercent: ((changeValue / (currentPrice - changeValue)) * 100).toFixed(2), // Simple calculation
+                // Re-calculating percentage change
+                changePercent: ((changeValue / (currentPrice - changeValue)) * 100).toFixed(2), 
                 holdings: generateMockHoldings(stock.symbol)
             };
         });
