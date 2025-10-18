@@ -1,1 +1,92 @@
-
+[
+  {
+    "name": "RELIANCE Co. Ltd.",
+    "symbol": "RELIANCE",
+    "indices": "SIMULATED / NIFTY 50",
+    "currentPrice": "1030.28",
+    "todayChange": "16.25",
+    "changePercent": "1.60",
+    "holdings": 10
+  },
+  {
+    "name": "TCS Co. Ltd.",
+    "symbol": "TCS",
+    "indices": "SIMULATED / NIFTY 50",
+    "currentPrice": "2088.63",
+    "todayChange": "-45.74",
+    "changePercent": "-2.14",
+    "holdings": 0
+  },
+  {
+    "name": "INFY Co. Ltd.",
+    "symbol": "INFY",
+    "indices": "SIMULATED / NIFTY 50",
+    "currentPrice": "1256.54",
+    "todayChange": "7.92",
+    "changePercent": "0.63",
+    "holdings": 10
+  },
+  {
+    "name": "HDFC Co. Ltd.",
+    "symbol": "HDFC",
+    "indices": "SIMULATED / NIFTY 50",
+    "currentPrice": "1266.58",
+    "todayChange": "-28.60",
+    "changePercent": "-2.21",
+    "holdings": 40
+  },
+  {
+    "name": "ICICIBANK Co. Ltd.",
+    "symbol": "ICICIBANK",
+    "indices": "SIMULATED / NIFTY 50",
+    "currentPrice": "1086.72",
+    "todayChange": "-13.42",
+    "changePercent": "-1.22",
+    "holdings": 0
+  },
+  {
+    "name": "HINDUNILVR Co. Ltd.",
+    "symbol": "HINDUNILVR",
+    "indices": "SIMULATED / NIFTY 50",
+    "currentPrice": "2445.70",
+    "todayChange": "-35.73",
+    "changePercent": "-1.44",
+    "holdings": 20
+  },
+  {
+    "name": "BAJFINANCE Co. Ltd.",
+    "symbol": "BAJFINANCE",
+    "indices": "SIMULATED / NIFTY 50",
+    "currentPrice": "1466.69",
+    "todayChange": "29.55",
+    "changePercent": "2.06",
+    "holdings": 40
+  },
+  {
+    "name": "LT Co. Ltd.",
+    "symbol": "LT",
+    "indices": "SIMULATED / NIFTY 50",
+    "currentPrice": "577.97",
+    "todayChange": "-10.45",
+    "changePercent": "-1.78",
+    "holdings": 10
+  },
+  {
+    "name": "KOTAKBANK Co. Ltd.",
+    "symbol": "KOTAKBANK",
+    "indices": "SIMULATED / NIFTY 50",
+    "currentPrice": "2442.69",
+    "todayChange": "-19.14",
+    "changePercent": "-0.78",
+    "holdings": 20
+  },
+  {
+    "name": "BHARTIARTL Co. Ltd.",
+    "symbol": "BHARTIARTL",
+    "indices": "SIMULATED / NIFTY 50",
+    "currentPrice": "2432.21",
+    "todayChange": "55.27",
+    "changePercent": "2.33",
+    "holdings": 20
+  }
+]
