@@ -11,9 +11,8 @@ const fs = require('fs');
 // The API Key is passed via GitHub Secrets (STOCK_MARKET_API environment variable)
 const API_KEY = process.env.STOCK_MARKET_API;
 
-// NOTE: Please replace this placeholder with the actual API endpoint URL 
-// provided by indianapi.in for fetching stock data.
-const BASE_API_URL = "https://api.indianapi.in/v1/latest-quotes"; 
+// FIX ATTEMPT: Removed '/v1' from the URL path as the server response suggested 'Proxy URL not found'.
+const BASE_API_URL = "https://api.indianapi.in/latest-quotes"; 
 
 // List of sample symbols to query from the API
 const SAMPLE_SYMBOLS = ['TCS', 'RELIANCE', 'INFY', 'HDFC', 'ICICIBANK']; 
@@ -36,10 +35,10 @@ async function fetchAndProcessData() {
         process.exit(1);
     }
     
-    // 1. FIX: Send Symbols as Query Parameter
+    // 1. Send Symbols as Query Parameter
     const url = `${BASE_API_URL}?symbols=${SAMPLE_SYMBOLS.join(',')}`;
 
-    // 2. FIX: Send API Key inside HTTP Headers (Common for secure APIs)
+    // 2. Send API Key inside HTTP Headers (Common for secure APIs)
     const requestOptions = {
         method: 'GET',
         headers: {
@@ -57,7 +56,7 @@ async function fetchAndProcessData() {
 
         // Check for common HTTP error status codes (4xx and 5xx)
         if (!response.ok) {
-            // Read and log the response body to understand WHY the server sent 400
+            // Read and log the response body to understand WHY the server sent 404
             const errorText = await response.text();
             console.error(`An error occurred during API fetch. Status: ${response.status} (${response.statusText})`);
             console.error(`Server Response Body (Reason for Error): ${errorText}`);
