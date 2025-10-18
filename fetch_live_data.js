@@ -36,11 +36,14 @@ async function fetchAndProcessData() {
             }
         });
         
-        // Extract cookies from the initial response header
-        const cookieHeader = initialResponse.headers.get('set-cookie');
-        if (cookieHeader) {
-            // Filter and join necessary cookies (often JSESSIONID and ak_bmsc)
-            cookies = cookieHeader.split(';').filter(cookie => 
+        // FIX: Use .raw() to retrieve all 'set-cookie' headers reliably
+        const cookieHeaders = initialResponse.headers.raw()['set-cookie'];
+        
+        if (cookieHeaders && cookieHeaders.length > 0) {
+            // Join all cookie headers and filter for necessary ones
+            const allCookies = cookieHeaders.join('; ');
+            
+            cookies = allCookies.split(';').filter(cookie => 
                 cookie.trim().startsWith('JSESSIONID') || cookie.trim().startsWith('bm_sv')
             ).join('; ');
         }
@@ -49,6 +52,7 @@ async function fetchAndProcessData() {
             console.error("Could not retrieve necessary cookies. Aborting.");
             process.exit(1);
         }
+        console.log("Successfully retrieved necessary cookies.");
         
     } catch (error) {
         console.error(`Error in Step 1 (Cookie Fetch): ${error.message}`);
@@ -85,13 +89,12 @@ async function fetchAndProcessData() {
         const data = await response.json();
         
         // --- Data Processing ---
-        // Filter out non-stock entries. Use optional chaining (?) for safer access.
         const stockData = data.data.filter(item => item.identifier && item.symbol);
         
         const processedStocks = stockData.map(stock => {
             
             return {
-                name: stock.meta?.companyName || stock.symbol, // Use optional chaining for safe access
+                name: stock.meta?.companyName || stock.symbol, 
                 symbol: stock.symbol,                                          
                 indices: 'NIFTY 50',                       
                 currentPrice: parseFloat(stock.lastPrice).toFixed(2),
