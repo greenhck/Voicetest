@@ -1,16 +1,14 @@
-name: Live Market Data Sync
+name: Daily Market Data Sync
 
 on:
-  # 1. Scheduled run (Runs every weekday at 3:40 PM IST / 11:10 AM UTC)
+  # Schedule to run every weekday (Mon-Fri) at 4:30 PM IST (11:00 UTC)
+  # This ensures the Bhavcopy data is likely available.
   schedule:
-    # CRON Expression: M H D M W
-    # Runs at 11:10 UTC (3:40 PM IST) on days 1-5 (Mon-Fri)
-    - cron: '10 11 * * 1-5' 
+    - cron: '0 11 * * 1-5' # 11:00 UTC = 4:30 PM IST
 
-  # 2. Manual trigger (Allows you to run it anytime manually from the GitHub UI)
+  # Manual trigger for debugging
   workflow_dispatch:
-    
-# FIX: Add permissions to allow the bot to commit and push changes back to the repository
+
 permissions:
   contents: write
 
@@ -19,30 +17,30 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      # Step 1: Checkout the repository code
+      # 1. Checkout the repository
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          # Use default token, which now has write permission
-          token: ${{ secrets.GITHUB_TOKEN }} 
           
-      # Step 2: Set up Node.js environment
-      - name: Setup Node.js
+      # 2. Setup Node.js environment
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      # Step 3: Install necessary dependencies (for node-fetch)
+      # 3. Install necessary dependencies 
       - name: Install Dependencies
-        run: npm install 
+        # Need node-fetch for HTTP, and csv-parser for parsing the Bhavcopy.
+        run: npm install node-fetch csv-parser
 
-      # Step 4: Run the data fetching script (No API Key needed)
-      - name: Fetch and Process Live Data
+      # 4. Fetch and Process Real Bhavcopy Data
+      - name: Fetch and Process Real Bhavcopy Data
+        # This script downloads the ZIP, unzips, parses the CSV, and saves marketdata.json
         run: node fetch_live_data.js
 
-      # Step 5: Commit and push the updated marketdata.json file
+      # 5. Commit and push the updated marketdata.json file
       - name: Commit Files
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Data Sync: Auto-updated marketdata.json from NSE"
-          branch: main # Change to your primary branch name if different
+          commit_message: "Data Sync: Updated ALL closing prices from NSE Bhavcopy"
+          files: "marketdata.json"
+          branch: main 
