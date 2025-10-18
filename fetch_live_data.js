@@ -11,17 +11,23 @@ const fs = require('fs');
 // The API Key is passed via GitHub Secrets (STOCK_MARKET_API environment variable)
 const API_KEY = process.env.STOCK_MARKET_API;
 
-// FIX ATTEMPT: Using the '/stock' endpoint based on the API list provided by you.
+// API Endpoint (Using /stock as confirmed)
 const BASE_API_URL = "https://stock.indianapi.in/stock"; 
 
-// List of sample symbols to query from the API
-const SAMPLE_SYMBOLS = ['TCS', 'RELIANCE', 'INFY', 'HDFC', 'ICICIBANK']; 
+// List of stock names to query (as the API uses 'name' parameter)
+// NOTE: These names must exactly match what the API expects for best results.
+const STOCK_NAMES = [
+    { name: 'Tata Consultancy Services', symbol: 'TCS' },
+    { name: 'Reliance Industries', symbol: 'RELIANCE' },
+    { name: 'Infosys', symbol: 'INFY' },
+    { name: 'HDFC Bank', symbol: 'HDFC' },
+    { name: 'ICICI Bank', symbol: 'ICICIBANK' }
+]; 
 
 // --- Core Logic ---
 
-// Helper function to create mock holdings for demonstration (since real holdings come from Local Storage/Firestore)
+// Helper function to create mock holdings
 const generateMockHoldings = (symbol) => {
-    // Generate a random holding count for a better demonstration of the UI
     const rand = Math.floor(Math.random() * 5);
     if (rand === 0) return 0;
     return rand * 10; 
@@ -35,66 +41,66 @@ async function fetchAndProcessData() {
         process.exit(1);
     }
     
-    // 1. Send Symbols as Query Parameter (Example: .../stock?symbols=TCS,RELIANCE)
-    const url = `${BASE_API_URL}?symbols=${SAMPLE_SYMBOLS.join(',')}`;
+    const processedStocks = [];
 
-    // 2. Send API Key inside HTTP Headers (ApiKeyAuth standard)
-    const requestOptions = {
-        method: 'GET',
-        headers: {
-            // Using X-API-KEY header as previously determined
-            'X-API-KEY': API_KEY, 
-            'Content-Type': 'application/json'
-        }
-    };
+    // Looping through each stock name to fetch data individually (API requirement)
+    for (const stock of STOCK_NAMES) {
+        // 1. Construct URL with 'name' parameter
+        const url = `${BASE_API_URL}?name=${encodeURIComponent(stock.name)}`;
 
+        // 2. Send API Key inside HTTP Headers
+        const requestOptions = {
+            method: 'GET',
+            headers: {
+                'X-API-KEY': API_KEY, 
+                'Content-Type': 'application/json'
+            }
+        };
 
-    try {
-        console.log(`Attempting to fetch data from: ${url}`);
-        const response = await fetch(url, requestOptions); 
+        try {
+            console.log(`Attempting to fetch data for: ${stock.name} (${stock.symbol})`);
+            const response = await fetch(url, requestOptions); 
 
-        // Check for common HTTP error status codes (4xx and 5xx)
-        if (!response.ok) {
-            // Read and log the response body to understand WHY the server failed
-            const errorText = await response.text();
-            console.error(`An error occurred during API fetch. Status: ${response.status} (${response.statusText})`);
-            console.error(`Server Response Body (Reason for Error): ${errorText}`);
-            
-            // Debugging hint for 403 status
-            if (response.status === 403) {
-                console.error("DEBUG HINT: 403 status often means the API Key is rejected or expired.");
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`- Error for ${stock.name}: Status ${response.status} (${response.statusText})`);
+                console.error(`- Server Response: ${errorText}`);
+                continue; // Skip to the next stock if current one fails
             }
 
-            throw new Error(`API fetch failed with status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        
-        // --- Data Processing (Adjust the keys below based on the ACTUAL successful API response) ---
-        // Assuming 'data' is an array of stock objects from the API
-        const processedStocks = data.map(stock => {
-            // Placeholder keys are used here; adjust these based on the ACTUAL keys in the successful API response
-            const currentPrice = stock.lastPrice || 0;
-            const changeValue = stock.change || 0; 
+            const data = await response.json();
             
-            return {
-                name: stock.symbol,                                             
-                indices: stock.instrumentType || 'Equity',                       
-                currentPrice: parseFloat(currentPrice).toFixed(2),
-                todayChange: parseFloat(changeValue).toFixed(2),
-                // Re-calculating percentage change
-                changePercent: ((changeValue / (currentPrice - changeValue)) * 100).toFixed(2), 
-                holdings: generateMockHoldings(stock.symbol)
-            };
-        });
+            // --- Data Processing (Assuming the API returns the stock object directly) ---
+            if (data && typeof data === 'object' && !Array.isArray(data)) {
+                // Ensure to replace placeholder keys with the ACTUAL keys from your API response
+                const currentPrice = data.lastPrice || 0;
+                const changeValue = data.change || 0; 
+                
+                processedStocks.push({
+                    name: stock.name,                                            
+                    symbol: stock.symbol,                                          
+                    indices: data.instrumentType || 'Equity',                       
+                    currentPrice: parseFloat(currentPrice).toFixed(2),
+                    todayChange: parseFloat(changeValue).toFixed(2),
+                    // Re-calculating percentage change
+                    changePercent: ((changeValue / (currentPrice - changeValue)) * 100).toFixed(2), 
+                    holdings: generateMockHoldings(stock.symbol)
+                });
+            } else {
+                console.error(`- Data structure for ${stock.name} was unexpected.`);
+            }
 
-        // Write the processed data to the marketdata.json file
+        } catch (error) {
+            console.error(`An error occurred while fetching ${stock.name}: ${error.message}`);
+        }
+    }
+    
+    // --- Final Step: Write to File ---
+    if (processedStocks.length > 0) {
         fs.writeFileSync('marketdata.json', JSON.stringify(processedStocks, null, 2));
-        console.log(`Successfully fetched and saved ${processedStocks.length} stocks to marketdata.json.`);
-
-    } catch (error) {
-        console.error(`An error occurred during data processing: ${error.message}`);
-        // Ensure the process exits with an error code if the fetch fails
+        console.log(`\n✅ Successfully fetched and saved ${processedStocks.length} stocks to marketdata.json.`);
+    } else {
+        console.error("\n❌ No stock data was successfully fetched. marketdata.json was not updated.");
         process.exit(1);
     }
 }
