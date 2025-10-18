@@ -11,8 +11,8 @@ const fs = require('fs');
 // The API Key is passed via GitHub Secrets (STOCK_MARKET_API environment variable)
 const API_KEY = process.env.STOCK_MARKET_API;
 
-// FIX ATTEMPT: Changed endpoint path to a more standard '/v1/quotes'
-const BASE_API_URL = "https://stock.indianapi.in/v1/quotes"; 
+// FINAL FIX ATTEMPT: Simplifying the endpoint path to just '/quotes' after other attempts failed.
+const BASE_API_URL = "https://stock.indianapi.in/quotes"; 
 
 // List of sample symbols to query from the API
 const SAMPLE_SYMBOLS = ['TCS', 'RELIANCE', 'INFY', 'HDFC', 'ICICIBANK']; 
