@@ -1,69 +1,86 @@
-// This file is designed to run in a controlled server environment, like GitHub Actions,
-// NOT in the client's browser (index.html).
-// It uses environment variables (like STOCK_MARKET_API) which are stored as GitHub Secrets.
-
-const fs = require('fs'); // Node.js File System module (required for GitHub Action environment)
-const fetch = require('node-fetch'); // Assuming a Node.js environment where fetch is available or polyfilled
-
-// The API key is securely accessed from the environment variables set by the GitHub Secret.
-const API_KEY = process.env.STOCK_MARKET_API;
-const API_ENDPOINT = 'https://api.indianapi.in/v1/live_market_data'; // Placeholder endpoint
-
 /**
- * Fetches data from the stock API, processes it, and saves it to marketdata.json.
+ * Live Data Fetch Script (fetch_live_data.js)
+ * * This script is intended to run via GitHub Actions. It fetches live market data
+ * using the provided API key and saves the processed data into marketdata.json.
+ * * IMPORTANT: This uses 'node-fetch' which must be installed via 'npm install node-fetch'.
  */
-async function fetchAndSaveMarketData() {
+const fetch = require('node-fetch');
+const fs = require('fs');
+
+// --- Configuration ---
+// The API Key is passed via GitHub Secrets (STOCK_MARKET_API environment variable)
+const API_KEY = process.env.STOCK_MARKET_API;
+
+// NOTE: Please replace this placeholder with the actual API endpoint URL 
+// provided by indianapi.in for fetching stock data.
+const BASE_API_URL = "https://api.indianapi.in/v1/latest-quotes"; 
+
+// List of sample symbols to query from the API
+const SAMPLE_SYMBOLS = ['TCS', 'RELIANCE', 'INFY', 'HDFC', 'ICICIBANK']; 
+
+// --- Core Logic ---
+
+// Helper function to create mock holdings for demonstration (since real holdings come from Local Storage/Firestore)
+const generateMockHoldings = (symbol) => {
+    // Generate a random holding count for a better demonstration of the UI
+    const rand = Math.floor(Math.random() * 5);
+    if (rand === 0) return 0;
+    return rand * 10; 
+};
+
+async function fetchAndProcessData() {
+    console.log("Starting to fetch live stock data...");
+
     if (!API_KEY) {
-        console.error("Error: STOCK_MARKET_API secret not found. Cannot fetch live data.");
-        return;
+        console.error("FATAL ERROR: STOCK_MARKET_API environment variable is not set.");
+        process.exit(1);
     }
 
+    // FIX FOR 400 ERROR: Construct the URL with the API key as a query parameter.
+    // NOTE: If indianapi.in requires the key in an 'Authorization' header, this part will need to be changed.
+    const url = `${BASE_API_URL}?apiKey=${API_KEY}&symbols=${SAMPLE_SYMBOLS.join(',')}`;
+
     try {
-        console.log("Fetching live stock data...");
-        
-        // 1. Fetch data from the external API
-        const response = await fetch(`${API_ENDPOINT}?key=${API_KEY}`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
+        console.log(`Attempting to fetch data from: ${url}`);
+        const response = await fetch(url);
+
+        // Check for common HTTP error status codes (4xx and 5xx)
         if (!response.ok) {
+            // Read and log the response body to understand WHY the server sent 400
+            const errorText = await response.text();
+            console.error(`An error occurred during API fetch. Status: ${response.status} (${response.statusText})`);
+            console.error(`Server Response Body (Reason for 400): ${errorText}`);
             throw new Error(`API fetch failed with status: ${response.status}`);
         }
 
-        const rawData = await response.json();
+        const data = await response.json();
         
-        // 2. Process and calculate data (e.g., calculate change, holdings, filter relevant stocks)
-        // NOTE: This part needs to be customized based on the exact API response structure.
-        const processedData = rawData.stocks.map(stock => ({
-            id: stock.symbol.toLowerCase().replace(/[^a-z0-9]/g, '_'),
-            name: stock.company_name,
-            index: stock.exchange,
-            price: stock.ltp,
-            change: stock.change_amount,
-            percent: stock.change_percent,
-            holdings: 0 // Placeholder: Holdings would ideally come from another user-specific database
-        }));
+        // --- Data Processing (Adjust based on actual API response structure) ---
+        // Assuming 'data' is an array of stock objects from the API
+        const processedStocks = data.map(stock => {
+            // Replace these placeholder keys with the actual keys from your indianapi.in response
+            const currentPrice = stock.lastPrice || 0;
+            const changeValue = stock.change || 0; 
+            
+            return {
+                name: stock.symbol,                                             // e.g., "TCS"
+                indices: stock.instrumentType || 'Equity',                       // e.g., "NSE"
+                currentPrice: parseFloat(currentPrice).toFixed(2),
+                todayChange: parseFloat(changeValue).toFixed(2),
+                changePercent: ((changeValue / (currentPrice - changeValue)) * 100).toFixed(2), // Simple calculation
+                holdings: generateMockHoldings(stock.symbol)
+            };
+        });
 
-        console.log(`Successfully processed ${processedData.length} stock entries.`);
-
-        // 3. Save the processed data to marketdata.json
-        fs.writeFileSync(
-            './marketdata.json', 
-            JSON.stringify(processedData, null, 4) // Pretty print JSON
-        );
-        
-        console.log("Data successfully written to marketdata.json. Ready for GitHub Pages deployment.");
+        // Write the processed data to the marketdata.json file
+        fs.writeFileSync('marketdata.json', JSON.stringify(processedStocks, null, 2));
+        console.log(`Successfully fetched and saved ${processedStocks.length} stocks to marketdata.json.`);
 
     } catch (error) {
-        console.error("An error occurred during data processing:", error.message);
+        console.error(`An error occurred during data processing: ${error.message}`);
+        // Ensure the process exits with an error code if the fetch fails
+        process.exit(1);
     }
 }
 
-// Execute the function
-fetchAndSaveMarketData();
-
-// When this script runs successfully in GitHub Actions at 3:30 PM, 
-// it will create/update 'marketdata.json'.
+fetchAndProcessData();
