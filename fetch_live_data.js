@@ -11,8 +11,8 @@ const fs = require('fs');
 // The API Key is passed via GitHub Secrets (STOCK_MARKET_API environment variable)
 const API_KEY = process.env.STOCK_MARKET_API;
 
-// FINAL FIX ATTEMPT: Simplifying the endpoint path to just '/quotes' after other attempts failed.
-const BASE_API_URL = "https://stock.indianapi.in/quotes"; 
+// FIX ATTEMPT: Using the '/stock' endpoint based on the API list provided by you.
+const BASE_API_URL = "https://stock.indianapi.in/stock"; 
 
 // List of sample symbols to query from the API
 const SAMPLE_SYMBOLS = ['TCS', 'RELIANCE', 'INFY', 'HDFC', 'ICICIBANK']; 
@@ -35,8 +35,7 @@ async function fetchAndProcessData() {
         process.exit(1);
     }
     
-    // 1. Send Symbols as Query Parameter
-    // Note: If the API requires symbols as a list in the body, this needs to be changed.
+    // 1. Send Symbols as Query Parameter (Example: .../stock?symbols=TCS,RELIANCE)
     const url = `${BASE_API_URL}?symbols=${SAMPLE_SYMBOLS.join(',')}`;
 
     // 2. Send API Key inside HTTP Headers (ApiKeyAuth standard)
@@ -61,7 +60,7 @@ async function fetchAndProcessData() {
             console.error(`An error occurred during API fetch. Status: ${response.status} (${response.statusText})`);
             console.error(`Server Response Body (Reason for Error): ${errorText}`);
             
-            // Check for specific error status 403 (Forbidden) if API key fails
+            // Debugging hint for 403 status
             if (response.status === 403) {
                 console.error("DEBUG HINT: 403 status often means the API Key is rejected or expired.");
             }
@@ -71,7 +70,8 @@ async function fetchAndProcessData() {
 
         const data = await response.json();
         
-        // --- Data Processing (Assuming API returns an array of stock objects) ---
+        // --- Data Processing (Adjust the keys below based on the ACTUAL successful API response) ---
+        // Assuming 'data' is an array of stock objects from the API
         const processedStocks = data.map(stock => {
             // Placeholder keys are used here; adjust these based on the ACTUAL keys in the successful API response
             const currentPrice = stock.lastPrice || 0;
