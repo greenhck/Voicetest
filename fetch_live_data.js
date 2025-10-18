@@ -35,13 +35,25 @@ async function fetchAndProcessData() {
         console.error("FATAL ERROR: STOCK_MARKET_API environment variable is not set. Please check GitHub Secrets.");
         process.exit(1);
     }
+    
+    // 1. FIX: Send Symbols as Query Parameter
+    const url = `${BASE_API_URL}?symbols=${SAMPLE_SYMBOLS.join(',')}`;
 
-    // FIX ATTEMPT: Changed 'apiKey' to 'key' as 'Missing API key' often means incorrect parameter name.
-    const url = `${BASE_API_URL}?key=${API_KEY}&symbols=${SAMPLE_SYMBOLS.join(',')}`;
+    // 2. FIX: Send API Key inside HTTP Headers (Common for secure APIs)
+    const requestOptions = {
+        method: 'GET',
+        headers: {
+            // Using X-API-KEY header to securely pass the key
+            'X-API-KEY': API_KEY, 
+            'Content-Type': 'application/json'
+        }
+    };
+
 
     try {
         console.log(`Attempting to fetch data from: ${url}`);
-        const response = await fetch(url);
+        // NOTE: The API key is now in the requestOptions, not the URL.
+        const response = await fetch(url, requestOptions); 
 
         // Check for common HTTP error status codes (4xx and 5xx)
         if (!response.ok) {
