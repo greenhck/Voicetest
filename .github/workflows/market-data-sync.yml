@@ -29,10 +29,9 @@ jobs:
           node-version: '20'
 
       # Step 3: Install necessary dependencies (e.g., node-fetch used in the script)
-      # Note: This assumes you have a package.json file listing 'node-fetch'
-      # If you don't have package.json, skip this step and ensure fetch is available
-      # - name: Install Dependencies
-      #   run: npm install 
+      # --- FIX: This step is now UNCOMMENTED to install node-fetch ---
+      - name: Install Dependencies
+        run: npm install 
 
       # Step 4: Run the data fetching script
       - name: Fetch and Process Live Data
