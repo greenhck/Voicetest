@@ -1,11 +1,11 @@
 name: Live Market Data Sync
 
 on:
-  # 1. Scheduled run (Runs every weekday at 3:30 PM IST / 10:00 AM UTC)
+  # 1. Scheduled run (Runs every weekday at 3:40 PM IST / 11:10 AM UTC)
   schedule:
     # CRON Expression: M H D M W
-    # Runs at 10:00 UTC (3:30 PM IST) on days 1-5 (Mon-Fri)
-    - cron: '0 10 * * 1-5' 
+    # Runs at 11:10 UTC (3:40 PM IST) on days 1-5 (Mon-Fri)
+    - cron: '10 11 * * 1-5' 
 
   # 2. Manual trigger (Allows you to run it anytime manually from the GitHub UI)
   workflow_dispatch:
@@ -32,23 +32,17 @@ jobs:
         with:
           node-version: '20'
 
-      # Step 3: Install necessary dependencies
+      # Step 3: Install necessary dependencies (for node-fetch)
       - name: Install Dependencies
         run: npm install 
 
-      # Step 4: Run the data fetching script
+      # Step 4: Run the data fetching script (No API Key needed)
       - name: Fetch and Process Live Data
         run: node fetch_live_data.js
-        env:
-          # Pass the API key securely from GitHub Secrets to the script
-          STOCK_MARKET_API: ${{ secrets.STOCK_MARKET_API }}
 
       # Step 5: Commit and push the updated marketdata.json file
-      # This step will now succeed because of the 'contents: write' permission added above
       - name: Commit Files
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Data Sync: Auto-updated marketdata.json from API"
-          # The files input is deprecated, but we keep it for now as it doesn't break the action
-          files: marketdata.json
+          commit_message: "Data Sync: Auto-updated marketdata.json from NSE"
           branch: main # Change to your primary branch name if different
