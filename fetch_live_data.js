@@ -32,13 +32,12 @@ async function fetchAndProcessData() {
     console.log("Starting to fetch live stock data...");
 
     if (!API_KEY) {
-        console.error("FATAL ERROR: STOCK_MARKET_API environment variable is not set.");
+        console.error("FATAL ERROR: STOCK_MARKET_API environment variable is not set. Please check GitHub Secrets.");
         process.exit(1);
     }
 
-    // FIX FOR 400 ERROR: Construct the URL with the API key as a query parameter.
-    // NOTE: If indianapi.in requires the key in an 'Authorization' header, this part will need to be changed.
-    const url = `${BASE_API_URL}?apiKey=${API_KEY}&symbols=${SAMPLE_SYMBOLS.join(',')}`;
+    // FIX ATTEMPT: Changed 'apiKey' to 'key' as 'Missing API key' often means incorrect parameter name.
+    const url = `${BASE_API_URL}?key=${API_KEY}&symbols=${SAMPLE_SYMBOLS.join(',')}`;
 
     try {
         console.log(`Attempting to fetch data from: ${url}`);
@@ -49,7 +48,7 @@ async function fetchAndProcessData() {
             // Read and log the response body to understand WHY the server sent 400
             const errorText = await response.text();
             console.error(`An error occurred during API fetch. Status: ${response.status} (${response.statusText})`);
-            console.error(`Server Response Body (Reason for 400): ${errorText}`);
+            console.error(`Server Response Body (Reason for Error): ${errorText}`);
             throw new Error(`API fetch failed with status: ${response.status}`);
         }
 
