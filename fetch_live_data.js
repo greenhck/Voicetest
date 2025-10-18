@@ -11,8 +11,8 @@ const fs = require('fs');
 // The API Key is passed via GitHub Secrets (STOCK_MARKET_API environment variable)
 const API_KEY = process.env.STOCK_MARKET_API;
 
-// FIX ATTEMPT: Removed '/v1' from the URL path as the server response suggested 'Proxy URL not found'.
-const BASE_API_URL = "https://api.indianapi.in/latest-quotes"; 
+// FINAL FIX: Changed subdomain from 'api.indianapi.in' to 'stock.indianapi.in' based on documentation.
+const BASE_API_URL = "https://stock.indianapi.in/latest-quotes"; 
 
 // List of sample symbols to query from the API
 const SAMPLE_SYMBOLS = ['TCS', 'RELIANCE', 'INFY', 'HDFC', 'ICICIBANK']; 
