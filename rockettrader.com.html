@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mobile Trading UI (Firebase & Auth)</title>
+    <title>Mobile Trading UI (Fixed)</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load Font Awesome Icons -->
@@ -36,15 +36,15 @@
             top: 0;
         }
         
-        /* --- Search Fullscreen Window (FADE-IN EFFECT: Requested behavior) --- */
+        /* --- Search Fullscreen Window (FADE-IN EFFECT) --- */
         #search-screen {
             position: fixed;
             inset: 0;
             background-color: white;
             z-index: 70;
-            opacity: 0; /* Hidden by default */
-            pointer-events: none; /* Inactive by default */
-            transition: opacity 0.3s ease-out; /* Smooth transition */
+            opacity: 0; 
+            pointer-events: none; 
+            transition: opacity 0.3s ease-out; 
             max-width: 500px;
             margin: 0 auto;
             overflow-y: auto;
@@ -54,7 +54,7 @@
             pointer-events: auto !important;
         }
         
-        /* --- GTT Fullscreen Order Window (SIDE-SLIDE EFFECT: Separate behavior) --- */
+        /* --- GTT Fullscreen Order Window (SIDE-SLIDE EFFECT) --- */
         .fullscreen-slide {
             position: fixed;
             inset: 0;
@@ -339,13 +339,14 @@
     // Global Constants
     const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     
-    const USER_PROJECT_ID = "weview129"; // Project ID provided by the user
+    // Using a generic project ID as a fallback, as the config will come from __firebase_config
+    const USER_PROJECT_ID = "weview129"; 
     
     let configFromEnv = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
 
-    // Use environment config if available, otherwise construct a complete config using the user's project ID as the fallback.
+    // Use environment config if available, otherwise construct a config using the user's project ID as the fallback.
+    // The key here is to rely on the environment's config and custom token for auth.
     const FIREBASE_CONFIG = {
-        // Removed explicit 'mock-api-key' to quiet down console warnings, rely on runtime for token.
         apiKey: configFromEnv.apiKey || "", 
         authDomain: configFromEnv.authDomain || `${USER_PROJECT_ID}.firebaseapp.com`,
         projectId: configFromEnv.projectId || USER_PROJECT_ID,
@@ -359,8 +360,9 @@
     // --- UTILITY FUNCTIONS ---
     // Function to safely parse/clean up the new data format
     const formatStockData = (rawStock) => {
-        // CRITICAL FIX: Ensure rawStock.Name exists before calling toLowerCase().
-        const stockName = rawStock.Name || ''; 
+        // *** CRITICAL FIX APPLIED HERE ***
+        // Safely check if Name exists and is a string before calling toLowerCase().
+        const stockName = rawStock.Name && typeof rawStock.Name === 'string' ? rawStock.Name : 'Unknown Stock'; 
 
         // Function to safely parse a value, defaulting to 0
         const parseValue = (val) => {
@@ -374,13 +376,13 @@
         const change = (ltp * (changePercent / 100)) || 0; // Estimate change value
 
         return {
-            id: stockName.toLowerCase().replace(/\s/g, '-'), // Use the safe stockName here
+            // Use the safe stockName here
+            id: stockName.toLowerCase().replace(/\s/g, '-').replace(/[^a-z0-9-]/g, ''), 
             name: stockName,
             index: 'NSE', // Assuming default index
             price: ltp,
             change: change,
             percent: changePercent,
-            // Include other data fields for search/future use
             raw: rawStock
         };
     };
@@ -528,10 +530,26 @@
     // --- INITIALIZATION ---
     window.onload = async function() {
         setLogLevel('Debug');
-        app = initializeApp(FIREBASE_CONFIG);
-        db = getFirestore(app);
-        auth = getAuth(app);
         
+        try {
+            // Check if config loaded successfully (based on debug findings)
+            if (!FIREBASE_CONFIG.apiKey) {
+                 console.error("FATAL: Firebase config is missing API Key. Check __firebase_config environment variable.");
+                 document.getElementById('auth-status').textContent = "Initialization Failed: Missing Firebase API Key.";
+                 return;
+            }
+
+            app = initializeApp(FIREBASE_CONFIG);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            
+        } catch(e) {
+            console.error("Firebase Initialization Error:", e);
+            document.getElementById('auth-status').textContent = "Initialization Failed. See console.";
+            return;
+        }
+
+
         // 1. Load Market Data from JSON file
         try {
             // Note: Since you mentioned marketdataNSE.json, I am using a generic placeholder 
@@ -544,7 +562,7 @@
                     allStocksData = rawData.map(formatStockData);
                     console.log(`Successfully loaded ${allStocksData.length} stocks from marketdata.json.`);
                 } else {
-                    console.error("marketdata.json loaded but is not an array.");
+                    console.error("marketdata.json loaded but is not an array. Using mock stock list.");
                 }
             } else {
                 // Mock data if fetch fails (for demonstration)
@@ -558,6 +576,14 @@
             }
         } catch (error) {
             console.error("Error loading marketdata.json:", error);
+            // Fallback to mock data if ANY error occurs during fetch/parse
+            if(allStocksData.length === 0) {
+                 const mockStocks = [
+                    { "Name": "Airtel", "LTP": "650.00", "Change(%)": "0.5%" }, 
+                    { "Name": "Maruti", "LTP": "9000.00", "Change(%)": "-1.2%" }
+                ];
+                allStocksData = mockStocks.map(formatStockData);
+            }
         }
 
         // Set persistence for user auth (optional but good practice)
@@ -615,9 +641,6 @@
             tab.onclick = () => changeWatchlist(list.id, index);
             
             // Fix: Long-press (contextmenu) prompts for rename
-            // Note: using oncontextmenu for desktop right-click, and a combination of touchstart/touchend logic 
-            // for mobile long-press is more robust in a real app, but for simplicity here, we use oncontextmenu 
-            // which often triggers on mobile long-press as well.
             tab.oncontextmenu = (e) => handleEditWatchlistName(e, list.id);
             
             tabsEl.appendChild(tab);
@@ -719,7 +742,7 @@
     // --- INTERACTION HANDLERS ---
     
     // 1. Holding Management (Buy/Sell)
-    const updateHoldingQuantity = async (stockId, change) => {
+    window.updateHoldingQuantity = async (stockId, change) => {
         if (!userId) return;
         
         // Get current holding or default to 0
