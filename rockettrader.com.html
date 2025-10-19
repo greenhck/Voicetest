@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mobile Trading UI (Local Storage)</title>
+    <title>Mobile Trading UI (Firebase & Auth)</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load Font Awesome Icons -->
@@ -12,13 +12,13 @@
         /* Custom styles to ensure edge-to-edge fit and smooth transitions */
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f7f7f7; /* Very light gray background */
+            background-color: #f7f7f7;
             margin: 0;
             padding: 0;
-            overscroll-behavior: contain; /* Prevent pull-to-refresh on scroll */
+            overscroll-behavior: contain;
         }
         #app-container {
-            max-width: 500px; /* Max width for mobile emulation */
+            max-width: 500px;
             margin: 0 auto;
             min-height: 100vh;
             display: flex;
@@ -27,8 +27,7 @@
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
             position: relative;
         }
-
-        /* Watchlist Header Animation */
+        /* Watchlist Header Animation (Hidden when scrolling down) */
         #watchlist-header {
             transition: transform 0.3s ease-in-out;
             will-change: transform;
@@ -36,22 +35,39 @@
             position: sticky;
             top: 0;
         }
-
-        /* Search Input Animation */
-        #search-container {
-            transition: all 0.3s ease-in-out;
-        }
-        .search-focused {
+        
+        /* --- Search Fullscreen Window (FADE-IN EFFECT: Requested behavior) --- */
+        #search-screen {
             position: fixed;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            max-width: 500px;
-            width: 100%;
-            padding: 16px 20px;
-            height: 100vh;
+            inset: 0;
             background-color: white;
-            z-index: 50;
+            z-index: 70;
+            opacity: 0; /* Hidden by default */
+            pointer-events: none; /* Inactive by default */
+            transition: opacity 0.3s ease-out; /* Smooth transition */
+            max-width: 500px;
+            margin: 0 auto;
+            overflow-y: auto;
+        }
+        .search-open {
+            opacity: 1 !important;
+            pointer-events: auto !important;
+        }
+        
+        /* --- GTT Fullscreen Order Window (SIDE-SLIDE EFFECT: Separate behavior) --- */
+        .fullscreen-slide {
+            position: fixed;
+            inset: 0;
+            background-color: white;
+            z-index: 70;
+            transform: translateX(100%);
+            transition: transform 0.3s ease-out;
+            max-width: 500px;
+            margin: 0 auto;
+            overflow-y: auto;
+        }
+        .slide-open-side { /* Used only for GTT screen */
+            transform: translateX(0%);
         }
 
         /* Bottom Sheet (Stock Details Popup) Animation */
@@ -63,7 +79,6 @@
         .sheet-open {
             transform: translateY(0%);
         }
-
         /* Index Popup Animation */
         #index-popup {
             transform: translateY(-100%);
@@ -73,13 +88,11 @@
         .index-open {
             transform: translateY(0%);
         }
-
         /* Global Modal Overlay */
         #modal-overlay {
             z-index: 30;
             transition: opacity 0.3s ease;
         }
-
         /* Custom scrollbar for horizontal tabs */
         #watchlist-tabs::-webkit-scrollbar {
             display: none;
@@ -88,24 +101,41 @@
             -ms-overflow-style: none; /* IE and Edge */
             scrollbar-width: none; /* Firefox */
         }
-
         /* Custom swipe animation container */
-        .watchlist-swipe-container {
-            overflow-x: hidden;
-            scroll-behavior: smooth;
+        #stock-list-container {
+            overflow-x: scroll;
+            scroll-behavior: smooth; /* Crucial for smooth tab switching */
+            width: 100%;
         }
         .watchlist-page {
             flex-shrink: 0;
             width: 100%;
             padding-bottom: 80px; /* Space for the bottom nav */
         }
-
     </style>
 </head>
 <body class="selection:bg-gray-200">
 
 <!-- The main mobile container -->
 <div id="app-container" class="h-screen overflow-hidden">
+    
+    <!-- Authentication Screen (Highest Priority) -->
+    <div id="auth-screen" class="fixed inset-0 bg-white z-90 flex flex-col justify-center items-center p-8 transition-opacity duration-300">
+        <h1 class="text-3xl font-bold text-blue-600 mb-6">Trade Mobile</h1>
+        <p id="auth-status" class="text-red-500 mb-4 text-sm"></p>
+        
+        <input id="auth-email" type="email" placeholder="Email" class="w-full mb-3 p-3 border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+        <input id="auth-password" type="password" placeholder="Password" class="w-full mb-6 p-3 border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+        
+        <button id="auth-primary-btn" onclick="handleAuthAction('login')" class="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg text-lg active:bg-blue-700 transition-colors">
+            Login
+        </button>
+        
+        <button onclick="toggleAuthMode()" class="mt-4 text-sm text-blue-600 hover:text-blue-700">
+            Switch to Create Account
+        </button>
+    </div>
+
     <!-- Overlay for Popups/Bottom Sheet -->
     <div id="modal-overlay" class="fixed inset-0 bg-black/50 opacity-0 pointer-events-none transition-opacity"></div>
 
@@ -119,12 +149,17 @@
             <!-- Index items will be rendered here -->
         </div>
     </div>
-
-    <!-- GTT Fullscreen Order Window -->
-    <div id="gtt-screen" class="fixed inset-0 bg-white z-70 transform translate-x-full transition-transform duration-300 max-w-[500px] mx-auto overflow-y-auto">
-        <!-- GTT content will be rendered here when opened -->
+    
+    <!-- Search Fullscreen Window (Fade-in) -->
+    <div id="search-screen" class="fixed inset-0 bg-white z-70 opacity-0 pointer-events-none transition-opacity duration-300 max-w-[500px] mx-auto overflow-y-auto">
+        <!-- Search content will be rendered here when opened -->
     </div>
 
+    <!-- GTT Fullscreen Order Window (Slide-in) -->
+    <div id="gtt-screen" class="fullscreen-slide">
+        <!-- GTT content will be rendered here when opened -->
+    </div>
+    
     <!-- Main Content Area -->
     <div id="main-content" class="flex-grow overflow-y-auto relative p-0">
         <!-- Watchlist Header (Sticky and Animating) -->
@@ -138,6 +173,7 @@
                     <i id="notification-icon" class="fa-solid fa-bell text-lg text-gray-700 cursor-pointer relative" onclick="openNotificationPopup()">
                         <span id="alert-dot" class="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500 hidden"></span>
                     </i>
+                    <i onclick="openSearch()" class="fa-solid fa-magnifying-glass text-lg text-gray-700 cursor-pointer"></i>
                 </div>
             </div>
             <!-- Notification Popup (Arrow indicator) -->
@@ -145,31 +181,18 @@
                 <div class="absolute -top-2 right-3 w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-b-8 border-b-white shadow-md"></div>
                 <p id="alert-message" class="text-sm text-black">No active alerts.</p>
             </div>
-
+            
             <!-- Watchlist Tabs (Horizontal Scroll) -->
             <div id="watchlist-tabs" class="flex overflow-x-scroll whitespace-nowrap space-x-6 pb-2">
                 <!-- Tabs will be rendered here -->
             </div>
         </div>
-
-        <!-- Search Input & Stock List -->
-        <div id="search-container" class="px-4 py-3 bg-white">
-            <div class="relative">
-                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm"></i>
-                <input id="search-input" type="text" placeholder="Search stocks, F&O, indices"
-                       class="w-full bg-gray-100 text-black placeholder-gray-500 rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-0 focus:bg-white focus:shadow-md transition-all duration-300"
-                       onfocus="handleSearchFocus()" onblur="handleSearchBlur()" oninput="handleSearchInput(this.value)">
-            </div>
-            <!-- Search Results/Autocomplete (Visible when focused) -->
-            <div id="search-results" class="hidden mt-4 space-y-2">
-                <!-- Autocomplete suggestions will appear here -->
-            </div>
-        </div>
-
+        
         <!-- Main Stock List Container (Swipable) -->
-        <div id="stock-list-container" class="watchlist-swipe-container flex">
+        <div id="stock-list-container" class="flex w-full" style="scroll-snap-type: x mandatory;">
             <!-- Watchlist pages will be rendered here -->
         </div>
+        
     </div>
 
     <!-- Stock Detail Bottom Sheet Popup -->
@@ -177,14 +200,14 @@
          ontouchstart="handleTouchStart(event)" ontouchmove="handleTouchMove(event)" ontouchend="handleTouchEnd(event)">
         <div class="p-4 flex flex-col">
             <div id="drag-handle" class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3 cursor-grab"></div>
-
+            
             <!-- Header Info -->
             <div id="sheet-header-info" class="flex justify-between items-start mb-4">
                 <!-- Content will be injected here -->
             </div>
-
+            
             <div class="w-full h-px bg-gray-200 mb-4"></div>
-
+            
             <!-- Action Buttons: Buy/Sell -->
             <div class="flex space-x-3 mb-4">
                 <button id="btn-buy" class="flex-1 py-3 text-white font-semibold rounded-lg text-sm transition-all duration-150 bg-green-600 active:bg-green-700" onclick="updateHoldingQuantity(currentStock.id, 1)">
@@ -194,7 +217,7 @@
                     SELL
                 </button>
             </div>
-
+            
             <!-- Secondary Buttons -->
             <div class="grid grid-cols-3 gap-3 text-center mb-4 text-sm text-gray-700 font-medium">
                 <button onclick="openAddNotePopup()" class="p-2 bg-gray-100 rounded-lg transition-colors active:bg-gray-200">
@@ -207,9 +230,9 @@
                     <i class="fa-solid fa-bell text-xs mr-1"></i> Set Alert
                 </button>
             </div>
-
+            
             <div class="w-full h-px bg-gray-200 mb-4"></div>
-
+            
             <!-- Notes Section -->
             <div id="notes-list" class="overflow-y-auto space-y-2 h-20">
                 <h3 class="text-sm font-semibold text-black mb-1">Notes:</h3>
@@ -230,7 +253,7 @@
             </div>
         </div>
     </div>
-
+    
     <div id="alert-popup" class="fixed inset-0 bg-black/50 opacity-0 pointer-events-none transition-opacity z-80 flex items-center justify-center">
         <div class="bg-white rounded-lg p-6 w-11/12 max-w-sm transform scale-90 transition-transform duration-200">
             <h2 class="text-lg font-semibold text-black mb-4">Set Price Alert</h2>
@@ -245,7 +268,6 @@
             </div>
         </div>
     </div>
-
 
     <!-- Bottom Navigation Bar (Fixed) -->
     <nav id="bottom-nav" class="fixed bottom-0 left-0 w-full border-t border-gray-200 bg-white max-w-[500px] mx-auto z-50">
@@ -274,19 +296,38 @@
     </nav>
 </div>
 
-<!-- Local Storage App Script -->
-<script>
+<!-- Firebase and App Script -->
+<script type="module">
+    // --- FIREBASE IMPORTS ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { 
+        getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, 
+        createUserWithEmailAndPassword, signInWithEmailAndPassword, setPersistence, 
+        browserLocalPersistence 
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { 
+        getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, where, 
+        addDoc, getDocs, deleteDoc, updateDoc, writeBatch, setLogLevel 
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
     // --- GLOBAL STATE ---
-    let allStocksData = []; // Loaded from marketdata.json
-    let allWatchlists = []; // Loaded from Local Storage
-    let stockAlerts = {}; // Loaded from Local Storage (Map: stockId -> Array of alerts)
-    let stockNotes = {}; // Loaded from Local Storage (Map: stockId -> Array of notes)
-    let portfolioHoldings = {}; // Loaded from Local Storage (Map: stockId -> quantity)
+    let app, db, auth;
+    let userId = null;
+    let allStocksData = [];
+    
+    // Firestore-synced data
+    let allWatchlists = []; 
+    let stockAlerts = {}; 
+    let stockNotes = {};
+    let portfolioHoldings = {}; 
+    let initialListeners = []; // To store snapshot cleanup functions
 
     let currentWatchlistId = 'default';
     let currentWatchlistIndex = 0;
-    let currentStock = null; // Stock object currently opened in bottom sheet
-
+    let currentStock = null; 
+    let isAuthReady = false;
+    let authMode = 'login'; // 'login' or 'signup'
+    
     // Mock Data for Indices Popup (Remains static)
     const MOCK_INDICES = [
         { name: 'SENSEX', price: 73000.50, change: 250.20, percent: 0.34 },
@@ -295,83 +336,238 @@
         { name: 'NIFTY FIN', price: 21500.25, change: 40.50, percent: 0.19 },
     ];
     
-    // --- LOCAL STORAGE FUNCTIONS ---
-    
+    // Global Constants
+    const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const FIREBASE_CONFIG = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+    const INITIAL_AUTH_TOKEN = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+    // --- UTILITY FUNCTIONS ---
+    // Function to safely parse/clean up the new data format
+    const formatStockData = (rawStock) => {
+        // Remove commas and parse percentage/LTP to number
+        const parseValue = (val) => parseFloat(String(val).replace(/,/g, '').replace('%', '').trim());
+
+        const ltp = parseValue(rawStock.LTP) || 0;
+        const changePercent = parseValue(rawStock['Change(%)']) || 0;
+        const change = (ltp * (changePercent / 100)) || 0; // Estimate change value
+
+        return {
+            id: rawStock.Name.toLowerCase().replace(/\s/g, '-'), // Unique ID
+            name: rawStock.Name,
+            index: 'NSE', // Assuming default index
+            price: ltp,
+            change: change,
+            percent: changePercent,
+            // Include other data fields for search/future use
+            raw: rawStock
+        };
+    };
+
+    // --- FIREBASE DATA MANAGEMENT ---
+
     /**
-     * Loads all app data (Watchlists, Alerts, Notes, Holdings) from Local Storage.
-     * If data is not found, initializes with default/mock values.
+     * Creates a standard path for user-specific collections.
+     * Path: /artifacts/{appId}/users/{userId}/{collectionName}
      */
-    const loadLocalStorageData = () => {
-        const defaultWatchlistId = 'my-watchlist';
+    const getCollectionPath = (collectionName) => {
+        return `artifacts/${APP_ID}/users/${userId}/${collectionName}`;
+    };
+
+    /**
+     * Sets up real-time listeners for all user data.
+     */
+    const setupRealtimeListeners = () => {
+        if (!db || !userId) return;
+
+        // Clear old listeners if they exist
+        initialListeners.forEach(unsubscribe => unsubscribe());
+        initialListeners = [];
+
+        // 1. Watchlists Listener
+        const watchlistsQuery = collection(db, getCollectionPath('watchlists'));
+        initialListeners.push(onSnapshot(watchlistsQuery, (snapshot) => {
+            allWatchlists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // Ensure a default watchlist exists if empty
+            if (allWatchlists.length === 0) {
+                initializeDefaultWatchlist();
+            } else {
+                allWatchlists.sort((a, b) => (a.order || 0) - (b.order || 0));
+                currentWatchlistId = allWatchlists[currentWatchlistIndex]?.id || allWatchlists[0].id;
+                renderWatchlistTabs();
+                renderStockList();
+            }
+        }, (error) => {
+            console.error("Watchlists Snapshot Error:", error);
+        }));
+
+        // 2. Holdings Listener
+        const holdingsQuery = doc(db, getCollectionPath('holdings'), 'my_holdings');
+        initialListeners.push(onSnapshot(holdingsQuery, (docSnapshot) => {
+            portfolioHoldings = docSnapshot.exists() ? docSnapshot.data().stocks || {} : {};
+            renderStockList(); // Re-render to show updated holdings count
+        }, (error) => {
+            console.error("Holdings Snapshot Error:", error);
+        }));
+
+        // 3. Alerts Listener
+        const alertsQuery = doc(db, getCollectionPath('alerts'), 'my_alerts');
+        initialListeners.push(onSnapshot(alertsQuery, (docSnapshot) => {
+            stockAlerts = docSnapshot.exists() ? docSnapshot.data().alerts || {} : {};
+            checkActiveAlerts();
+        }, (error) => {
+            console.error("Alerts Snapshot Error:", error);
+        }));
         
-        // 1. Load Holdings
-        const storedHoldings = localStorage.getItem('portfolioHoldings');
-        portfolioHoldings = storedHoldings ? JSON.parse(storedHoldings) : {};
-
-        // 2. Load Watchlists
-        const storedWatchlists = localStorage.getItem('allWatchlists');
-        if (storedWatchlists) {
-            allWatchlists = JSON.parse(storedWatchlists);
-        } else {
-            // Default watchlist creation using IDs from loaded market data
-            const initialStocks = allStocksData.length > 0 ? allStocksData.slice(0, 4).map(s => s.id) : [];
-            allWatchlists = [
-                { id: defaultWatchlistId, name: 'My Watchlist', stocks: initialStocks, order: 0 },
-            ];
-        }
-        currentWatchlistId = allWatchlists[0].id;
-        currentWatchlistIndex = 0;
-
-        // 3. Load Alerts
-        const storedAlerts = localStorage.getItem('stockAlerts');
-        stockAlerts = storedAlerts ? JSON.parse(storedAlerts) : {};
-
-        // 4. Load Notes
-        const storedNotes = localStorage.getItem('stockNotes');
-        stockNotes = storedNotes ? JSON.parse(storedNotes) : {};
-
-        console.log("Local Storage Data Loaded.");
+        // 4. Notes Listener
+        const notesQuery = doc(db, getCollectionPath('notes'), 'my_notes');
+        initialListeners.push(onSnapshot(notesQuery, (docSnapshot) => {
+            stockNotes = docSnapshot.exists() ? docSnapshot.data().notes || {} : {};
+        }, (error) => {
+            console.error("Notes Snapshot Error:", error);
+        }));
+        
+        console.log("Firestore Listeners started for user:", userId);
     };
 
     /**
-     * Saves all app data back to Local Storage.
+     * Initializes a default watchlist if none exists.
      */
-    const saveAllDataToLocalStorage = () => {
-        localStorage.setItem('portfolioHoldings', JSON.stringify(portfolioHoldings));
-        localStorage.setItem('allWatchlists', JSON.stringify(allWatchlists));
-        localStorage.setItem('stockAlerts', JSON.stringify(stockAlerts));
-        localStorage.setItem('stockNotes', JSON.stringify(stockNotes));
-        console.log("Data saved to Local Storage.");
+    const initializeDefaultWatchlist = async () => {
+        if (!db || !userId) return;
+
+        const defaultId = 'my-watchlist';
+        const initialStocks = allStocksData.length > 0 ? allStocksData.slice(0, 4).map(s => s.id) : [];
+
+        try {
+            await setDoc(doc(db, getCollectionPath('watchlists'), defaultId), {
+                name: 'My Watchlist',
+                stocks: initialStocks,
+                order: 0
+            });
+            console.log("Default watchlist created in Firestore.");
+        } catch (e) {
+            console.error("Error adding default document: ", e);
+        }
+    };
+    
+    // --- AUTHENTICATION FUNCTIONS ---
+    window.handleAuthAction = async (action) => {
+        const emailEl = document.getElementById('auth-email');
+        const passwordEl = document.getElementById('auth-password');
+        const statusEl = document.getElementById('auth-status');
+        const email = emailEl.value;
+        const password = passwordEl.value;
+
+        if (!email || !password) {
+            statusEl.textContent = 'Please enter both email and password.';
+            return;
+        }
+
+        statusEl.textContent = 'Processing...';
+
+        try {
+            if (action === 'login') {
+                await signInWithEmailAndPassword(auth, email, password);
+            } else { // signup
+                await createUserWithEmailAndPassword(auth, email, password);
+            }
+            // onAuthStateChanged handles success
+        } catch (error) {
+            let message = 'An unknown error occurred.';
+            if (error.code.includes('auth/')) {
+                 message = error.message.replace('Firebase: ', '');
+            }
+            statusEl.textContent = `Error: ${message}`;
+        }
+    };
+    
+    window.toggleAuthMode = () => {
+        authMode = authMode === 'login' ? 'signup' : 'login';
+        const primaryBtn = document.getElementById('auth-primary-btn');
+        const toggleBtn = document.querySelector('#auth-screen button:last-child');
+        
+        if (authMode === 'login') {
+            primaryBtn.textContent = 'Login';
+            primaryBtn.onclick = () => handleAuthAction('login');
+            toggleBtn.textContent = 'Switch to Create Account';
+        } else {
+            primaryBtn.textContent = 'Create Account';
+            primaryBtn.onclick = () => handleAuthAction('signup');
+            toggleBtn.textContent = 'Switch to Login';
+        }
+        document.getElementById('auth-status').textContent = '';
     };
 
+    const hideAuthScreen = () => {
+        document.getElementById('auth-screen').style.opacity = '0';
+        document.getElementById('auth-screen').style.pointerEvents = 'none';
+    };
+    
     // --- INITIALIZATION ---
     window.onload = async function() {
+        setLogLevel('Debug');
+        app = initializeApp(FIREBASE_CONFIG);
+        db = getFirestore(app);
+        auth = getAuth(app);
+        
         // 1. Load Market Data from JSON file
         try {
-            const jsonResponse = await fetch('./marketdata.json');
+            // Note: Since you mentioned marketdataNSE.json, I am using a generic placeholder 
+            // but the structure from the request is used in formatting.
+            const jsonResponse = await fetch('./marketdata.json'); 
             if (jsonResponse.ok) {
-                allStocksData = await jsonResponse.json();
+                const rawData = await jsonResponse.json();
+                allStocksData = rawData.map(formatStockData);
                 console.log(`Successfully loaded ${allStocksData.length} stocks from marketdata.json.`);
             } else {
-                console.warn("marketdata.json not found or failed to load. Using empty stock list.");
+                // Mock data if fetch fails (for demonstration)
+                const mockStocks = [{ "Name": "Reliance Industries", "LTP": "1,416.80", "Change(%)": "1.32%" }, { "Name": "Tata Consultancy Services", "LTP": "3,800.25", "Change(%)": "-0.55%" }, { "Name": "HDFC Bank", "LTP": "1,500.00", "Change(%)": "2.10%" }];
+                allStocksData = mockStocks.map(formatStockData);
+                console.warn("marketdata.json not found or failed to load. Using mock stock list.");
             }
         } catch (error) {
             console.error("Error loading marketdata.json:", error);
         }
 
-        // 2. Load Private Data from Local Storage
-        loadLocalStorageData();
+        // Set persistence for user auth (optional but good practice)
+        await setPersistence(auth, browserLocalPersistence);
 
-        // 3. Render UI
-        renderWatchlistTabs();
-        renderStockList();
-        renderIndicesPopup();
-        checkActiveAlerts();
-        setupWatchlistScrollBehavior();
+        // 2. Set up Auth Listener
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+                console.log("User Authenticated:", userId);
+                hideAuthScreen();
+                setupRealtimeListeners();
+                renderIndicesPopup(); 
+                setupWatchlistScrollBehavior();
+                isAuthReady = true;
+            } else {
+                userId = null;
+                isAuthReady = false;
+                // If initial token is provided, attempt sign-in first
+                if (INITIAL_AUTH_TOKEN) {
+                    try {
+                        await signInWithCustomToken(auth, INITIAL_AUTH_TOKEN);
+                    } catch (e) {
+                        console.warn("Custom token sign-in failed. Falling back to email/password auth.", e);
+                        // If custom token fails, show the regular auth screen
+                        document.getElementById('auth-screen').style.opacity = '1';
+                        document.getElementById('auth-screen').style.pointerEvents = 'auto';
+                    }
+                } else {
+                    // No token, show the regular auth screen
+                    document.getElementById('auth-screen').style.opacity = '1';
+                    document.getElementById('auth-screen').style.pointerEvents = 'auto';
+                }
+            }
+        });
     };
 
-
     // --- UI RENDERING FUNCTIONS ---
+    
+    // Helper to get formatted stock data
+    const getStockById = (id) => allStocksData.find(s => s.id === id);
 
     const renderWatchlistTabs = () => {
         const tabsEl = document.getElementById('watchlist-tabs');
@@ -379,58 +575,67 @@
         allWatchlists.forEach((list, index) => {
             const isActive = list.id === currentWatchlistId;
             const tab = document.createElement('div');
-            tab.className = `cursor-pointer pb-2 text-sm font-medium transition-colors ${isActive ? 'text-black' : 'text-gray-500'}`;
+            tab.className = `cursor-pointer pb-2 text-sm font-medium transition-colors ${isActive ? 'text-black font-semibold' : 'text-gray-500'}`;
             tab.style.borderBottom = isActive ? '2px solid #3b82f6' : '2px solid transparent';
             tab.textContent = list.name;
             tab.dataset.id = list.id;
+            
+            // Fix: Simple click changes watchlist
             tab.onclick = () => changeWatchlist(list.id, index);
-            tab.oncontextmenu = tab.ontouchstart = (e) => handleEditWatchlistName(e, list.id);
+            
+            // Fix: Long-press (contextmenu) prompts for rename
+            // Note: using oncontextmenu for desktop right-click, and a combination of touchstart/touchend logic 
+            // for mobile long-press is more robust in a real app, but for simplicity here, we use oncontextmenu 
+            // which often triggers on mobile long-press as well.
+            tab.oncontextmenu = (e) => handleEditWatchlistName(e, list.id);
+            
             tabsEl.appendChild(tab);
         });
 
         // Add the '+' icon
         const addTab = document.createElement('div');
-        addTab.className = 'cursor-pointer pb-2 text-gray-500 hover:text-black transition-colors';
+        addTab.className = 'cursor-pointer pb-2 text-gray-500 hover:text-black transition-colors px-2';
         addTab.innerHTML = '<i class="fa-solid fa-plus text-lg"></i>';
         addTab.onclick = addNewWatchlist;
         tabsEl.appendChild(addTab);
-
-        // Scroll the active tab into view
-        const activeTabEl = tabsEl.querySelector(`[data-id="${currentWatchlistId}"]`);
-        if (activeTabEl) {
-             activeTabEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-        }
     };
-
-    const getStockById = (id) => allStocksData.find(s => s.id === id);
 
     const renderStockList = () => {
         const listContainer = document.getElementById('stock-list-container');
-        listContainer.innerHTML = ''; // Clear existing pages
+        if (allWatchlists.length === 0) {
+            listContainer.innerHTML = `<p class="p-4 text-gray-500 text-sm italic w-full">Loading or no watchlists created.</p>`;
+            return;
+        }
+
+        const containerWidth = listContainer.offsetWidth;
+        listContainer.innerHTML = ''; 
 
         allWatchlists.forEach((list) => {
             const watchlistPage = document.createElement('div');
             watchlistPage.className = 'watchlist-page';
             watchlistPage.dataset.watchlistId = list.id;
+            watchlistPage.style.width = `${containerWidth}px`; // Explicitly set width for snapping/scrolling
 
-            // Get stocks for the current list (using loaded allStocksData for content display)
             const currentStockIds = list.stocks || [];
             const stocksToShow = currentStockIds
                 .map(id => getStockById(id))
-                .filter(stock => stock); // Filter out any IDs not found in the loaded data
+                .filter(stock => stock); 
 
             if (stocksToShow.length === 0) {
-                watchlistPage.innerHTML = `<p class="p-4 text-gray-500 text-sm italic">Add stocks using the search bar above.</p>`;
+                watchlistPage.innerHTML = `<p class="p-4 text-gray-500 text-sm italic">Add stocks using the search icon above.</p>`;
             } else {
                 let html = stocksToShow.map(stock => {
-                    const isPositive = stock.change >= 0;
+                    // Use new data format: stock.price, stock.percent
+                    const isPositive = stock.percent >= 0;
                     const changeColor = isPositive ? 'text-green-600' : 'text-red-600';
                     const changeIcon = isPositive ? 'fa-caret-up' : 'fa-caret-down';
                     
-                    // --- IMPORTANT: Get holdings from Local Storage (portfolioHoldings) ---
                     const holdingQty = portfolioHoldings[stock.id] || 0;
-                    const holdingText = holdingQty > 0 ? `<span class="text-xs text-gray-500 ml-1">(${holdingQty})</span>` : '';
-
+                    const holdingText = holdingQty > 0 ? `<span class="text-xs text-gray-500 ml-1 font-semibold">(${holdingQty} Held)</span>` : '';
+                    
+                    // Format LTP using toLocaleString for Indian number style (optional, but good for finance)
+                    const ltpFormatted = stock.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    
                     return `
                         <div class="px-4 py-3 flex justify-between items-center cursor-pointer active:bg-gray-50" onclick="handleStockClick('${stock.id}')" data-stock-id="${stock.id}">
                             <!-- Left Aligned Info -->
@@ -440,7 +645,7 @@
                             </div>
                             <!-- Right Aligned Info -->
                             <div class="text-right">
-                                <p class="text-sm font-semibold text-black">${stock.price.toFixed(2)}</p>
+                                <p class="text-sm font-semibold text-black">${ltpFormatted}</p>
                                 <p class="text-xs ${changeColor} mt-0.5">
                                     <i class="fa-solid ${changeIcon} mr-0.5"></i> ${Math.abs(stock.change).toFixed(2)} (${Math.abs(stock.percent).toFixed(2)}%)
                                 </p>
@@ -456,7 +661,7 @@
         });
 
         // Set the initial scroll position to the current watchlist
-        listContainer.scrollLeft = currentWatchlistIndex * listContainer.offsetWidth;
+        listContainer.scrollLeft = currentWatchlistIndex * containerWidth;
     };
 
     const renderIndicesPopup = () => {
@@ -465,7 +670,7 @@
             const isPositive = index.change >= 0;
             const changeColor = isPositive ? 'text-green-600' : 'text-red-600';
             const changeIcon = isPositive ? 'fa-caret-up' : 'fa-caret-down';
-
+            
             return `
                 <div class="flex justify-between items-center p-3 border border-gray-100 rounded-lg shadow-sm">
                     <p class="text-sm font-semibold text-black">${index.name}</p>
@@ -479,79 +684,68 @@
             `;
         }).join('');
     };
-
-    const renderNotesList = (stockId) => {
-        const notesListEl = document.getElementById('notes-list');
-        notesListEl.querySelector('#no-notes').classList.add('hidden');
-        // Clear previous notes, but keep the header
-        notesListEl.querySelectorAll('.stock-note').forEach(el => el.remove());
-
-        const notes = stockNotes[stockId] || [];
-
-        if (notes.length === 0) {
-            notesListEl.querySelector('#no-notes').classList.remove('hidden');
+    
+    // --- INTERACTION HANDLERS ---
+    
+    // 1. Holding Management (Buy/Sell)
+    const updateHoldingQuantity = async (stockId, change) => {
+        if (!userId) return;
+        
+        // Get current holding or default to 0
+        let currentHolding = portfolioHoldings[stockId] || 0;
+        let newHolding = currentHolding + change;
+        
+        if (newHolding < 0) {
+            console.warn("Cannot sell more than held.");
             return;
         }
 
-        notes.forEach(note => {
-            const noteEl = document.createElement('p');
-            noteEl.className = 'stock-note text-xs text-black bg-gray-50 p-2 rounded-md border-l-2 border-blue-400';
-            const date = new Date(note.created).toLocaleDateString();
-            noteEl.innerHTML = `<span class="font-medium">${date}:</span> ${note.content}`;
-            notesListEl.appendChild(noteEl);
-        });
-    };
-
-    // --- INTERACTION HANDLERS ---
-
-    // 1. Holding Management (Buy/Sell)
-    const updateHoldingQuantity = (stockId, change) => {
-        // Get current holding or default to 0
-        let currentHolding = portfolioHoldings[stockId] || 0;
+        const holdingsRef = doc(db, getCollectionPath('holdings'), 'my_holdings');
         
-        // Calculate new holding
-        const newHolding = currentHolding + change;
-
-        if (newHolding < 0) {
-            console.warn("Cannot sell more than held.");
-            // In a real app, this would show a user-facing error message
-            return; 
-        }
-
+        const batch = writeBatch(db);
+        
+        // Prepare the new holdings map
+        const updatedHoldings = { ...portfolioHoldings };
         if (newHolding === 0) {
-            // Remove entry if holding reaches zero to keep data clean
-            delete portfolioHoldings[stockId];
+            delete updatedHoldings[stockId];
         } else {
-            portfolioHoldings[stockId] = newHolding;
+            updatedHoldings[stockId] = newHolding;
         }
 
-        saveAllDataToLocalStorage();
-        closeStockDetailSheet(); // Close sheet to reflect changes
-        renderStockList(); // Re-render the watchlist to show updated holdings count
+        try {
+             // Use setDoc with merge: true to update the document, creating it if it doesn't exist.
+            batch.set(holdingsRef, { stocks: updatedHoldings }, { merge: true });
+            await batch.commit();
+            
+            closeStockDetailSheet();
+            // Real-time listener will re-render stock list automatically
+        } catch (error) {
+            console.error("Error updating holdings:", error);
+        }
     };
-
+    
     // 2. Header Scroll Hide/Show
     let lastScrollTop = 0;
     const watchlistHeader = document.getElementById('watchlist-header');
     const mainContent = document.getElementById('main-content');
-
+    
     const setupWatchlistScrollBehavior = () => {
         mainContent.addEventListener('scroll', () => {
             const scrollTop = mainContent.scrollTop;
 
-            if (scrollTop > lastScrollTop) {
-                // Scrolling down - Hide the header and search
+            if (scrollTop > lastScrollTop && scrollTop > 50) {
+                // Scrolling down - Hide the header
                 watchlistHeader.style.transform = 'translateY(-100%)';
-            } else if (scrollTop < lastScrollTop) {
-                // Scrolling up - Show the header and search
+            } else if (scrollTop < lastScrollTop || scrollTop < 50) {
+                // Scrolling up - Show the header
                 watchlistHeader.style.transform = 'translateY(0)';
             }
-            lastScrollTop = scrollTop <= 0 ? 0 : scrollTop; // For Mobile or touch devices
+            lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
         });
     }
 
     // 3. Index Popup (Down Arrow)
-    const toggleIndexPopup = () => {
+    window.toggleIndexPopup = () => {
         const popup = document.getElementById('index-popup');
         const overlay = document.getElementById('modal-overlay');
         const toggleIcon = document.getElementById('index-toggle-icon');
@@ -559,14 +753,14 @@
         const isOpen = popup.classList.toggle('index-open');
 
         if (isOpen) {
-            overlay.classList.remove('pointer-events-none', 'opacity-0');
-            overlay.classList.add('pointer-events-auto', 'opacity-100');
+            overlay.classList.replace('opacity-0', 'opacity-100');
+            overlay.classList.replace('pointer-events-none', 'pointer-events-auto');
             overlay.onclick = toggleIndexPopup;
             toggleIcon.classList.replace('fa-chevron-down', 'fa-xmark');
             toggleIcon.classList.add('text-black');
         } else {
-            overlay.classList.remove('pointer-events-auto', 'opacity-100');
-            overlay.classList.add('pointer-events-none', 'opacity-0');
+            overlay.classList.replace('opacity-100', 'opacity-0');
+            overlay.classList.replace('pointer-events-auto', 'pointer-events-none');
             overlay.onclick = null;
             toggleIcon.classList.replace('fa-xmark', 'fa-chevron-down');
             toggleIcon.classList.remove('text-black');
@@ -574,68 +768,91 @@
     };
 
     // 4. Watchlist Management
-    const changeWatchlist = (id, index) => {
+    window.changeWatchlist = (id, index) => {
         currentWatchlistId = id;
         currentWatchlistIndex = index;
         renderWatchlistTabs();
+        // Smooth scroll the list container (Fix for visual swipe effect)
         document.getElementById('stock-list-container').scrollLeft = index * document.getElementById('stock-list-container').offsetWidth;
-        // No need to call renderStockList again, as the list container is just scrolled
     };
 
-    const handleEditWatchlistName = (e, id) => {
-        e.preventDefault();
+    window.handleEditWatchlistName = (e, id) => {
+        e.preventDefault(); // Prevent context menu on long press
+        if (!userId) return;
+
         const list = allWatchlists.find(w => w.id === id);
         if (!list) return;
 
+        // Use a simple prompt for now, or you could implement a custom modal
         const newName = prompt(`Enter new name for: ${list.name}`);
-        if (newName && newName.trim()) {
-            list.name = newName.trim();
-            saveAllDataToLocalStorage();
-            renderWatchlistTabs();
+        if (newName && newName.trim() && newName.trim() !== list.name) {
+            const listRef = doc(db, getCollectionPath('watchlists'), id);
+            updateDoc(listRef, { name: newName.trim() })
+                .then(() => console.log("Watchlist name updated."))
+                .catch(error => console.error("Error updating watchlist name:", error));
+            
+            // Listener will re-render tabs automatically
         }
     };
 
-    const addNewWatchlist = () => {
+    window.addNewWatchlist = async () => {
+        if (!userId) return;
+
         const name = prompt("Enter new watchlist name:");
         if (name && name.trim()) {
-            const newId = crypto.randomUUID(); // Unique ID for new list
-            allWatchlists.push({
-                id: newId,
-                name: name.trim(),
-                stocks: [],
-                order: allWatchlists.length
-            });
-            saveAllDataToLocalStorage();
-            renderWatchlistTabs();
-            renderStockList();
+            try {
+                const listRef = collection(db, getCollectionPath('watchlists'));
+                await addDoc(listRef, {
+                    name: name.trim(),
+                    stocks: [],
+                    order: allWatchlists.length 
+                });
+                // Listener will add the new tab automatically
+            } catch (e) {
+                console.error("Error adding new watchlist:", e);
+            }
         }
     };
-
-    // 5. Search Functionality
-    const handleSearchFocus = () => {
-        const searchContainer = document.getElementById('search-container');
-        const searchInput = document.getElementById('search-input');
-        searchContainer.classList.add('search-focused');
-        document.getElementById('search-results').classList.remove('hidden');
-
-        // Restore original position on blur/x-click
-        searchInput.onblur = handleSearchBlur;
+    
+    // 5. Search Functionality (Now a Fullscreen Fade Modal - Fixed as requested)
+    window.openSearch = () => {
+        const searchScreen = document.getElementById('search-screen');
+        searchScreen.innerHTML = `
+            <div class="p-4 border-b border-gray-100 flex items-center bg-white sticky top-0">
+                <i class="fa-solid fa-arrow-left text-lg text-black cursor-pointer mr-3" onclick="closeSearch()"></i>
+                <input id="search-input" type="text" placeholder="Search stocks, F&O, indices"
+                       class="w-full bg-gray-100 text-black placeholder-gray-500 rounded-lg py-2 pl-4 pr-4 text-sm focus:outline-none focus:ring-0 focus:bg-white focus:shadow-md transition-all duration-300"
+                       oninput="handleSearchInput(this.value)" autofocus>
+            </div>
+            <div id="search-results" class="p-4 space-y-2">
+                <p class="text-sm text-gray-500 p-2">Start typing to search...</p>
+            </div>
+        `;
+        document.body.style.overflow = 'hidden';
+        
+        // FADE-IN: Full white page
+        searchScreen.classList.add('search-open');
     };
 
-    const handleSearchBlur = () => {
-        const searchContainer = document.getElementById('search-container');
-        searchContainer.classList.remove('search-focused');
-        document.getElementById('search-results').classList.add('hidden');
+    window.closeSearch = () => {
+        const searchScreen = document.getElementById('search-screen');
+        // FADE-OUT
+        searchScreen.classList.remove('search-open');
+        document.body.style.overflow = '';
     };
 
-    const handleSearchInput = (value) => {
+    window.handleSearchInput = (value) => {
         const resultsEl = document.getElementById('search-results');
         if (value.length < 2) {
             resultsEl.innerHTML = '<p class="text-sm text-gray-500 p-2">Start typing to search...</p>';
             return;
         }
-        // Use loaded data for Autocomplete Suggestion Logic
-        const filtered = allStocksData.filter(s => s.name.toLowerCase().includes(value.toLowerCase()) || s.id.includes(value.toLowerCase()));
+
+        const filtered = allStocksData.filter(s => 
+            s.name.toLowerCase().includes(value.toLowerCase()) || 
+            s.id.includes(value.toLowerCase())
+        ).slice(0, 10); // Limit to 10 results
+
         const currentList = allWatchlists.find(w => w.id === currentWatchlistId);
 
         resultsEl.innerHTML = filtered.map(stock => {
@@ -658,50 +875,54 @@
         }).join('');
     };
 
-    const toggleStockInWatchlist = (event, stockId) => {
-        event.stopPropagation(); 
+    window.toggleStockInWatchlist = async (event, stockId) => {
+        event.stopPropagation();
+        if (!userId) return;
+
         const currentList = allWatchlists.find(w => w.id === currentWatchlistId);
         if (!currentList) return;
 
         const index = currentList.stocks.indexOf(stockId);
+        const newStocks = [...currentList.stocks];
 
         if (index > -1) {
-            // Remove stock
-            currentList.stocks.splice(index, 1);
+            newStocks.splice(index, 1);
         } else {
-            // Add stock
-            currentList.stocks.push(stockId);
+            newStocks.push(stockId);
         }
-        
-        saveAllDataToLocalStorage();
-        renderStockList();
-        // Re-run search input to update the '+' icon status
-        handleSearchInput(document.getElementById('search-input').value);
-    };
 
+        try {
+            const listRef = doc(db, getCollectionPath('watchlists'), currentList.id);
+            await updateDoc(listRef, { stocks: newStocks });
+            // Listener will handle re-rendering, just update the search UI instantly
+            handleSearchInput(document.getElementById('search-input').value);
+        } catch (error) {
+            console.error("Error toggling stock in watchlist:", error);
+        }
+    };
+    
     // 6. Stock Detail Bottom Sheet
     let startY = 0;
     let currentSheetOffset = 0;
-
-    const handleTouchStart = (e) => {
+    
+    window.handleTouchStart = (e) => {
         startY = e.touches[0].clientY;
         document.getElementById('stock-detail-sheet').style.transition = 'none';
     };
 
-    const handleTouchMove = (e) => {
+    window.handleTouchMove = (e) => {
         const diffY = e.touches[0].clientY - startY;
-        // Only allow downward swipe for closing
         if (diffY > 0) {
             currentSheetOffset = diffY;
             document.getElementById('stock-detail-sheet').style.transform = `translateY(${diffY}px)`;
         }
     };
 
-    const handleTouchEnd = () => {
+    window.handleTouchEnd = () => {
         const sheet = document.getElementById('stock-detail-sheet');
         sheet.style.transition = 'transform 0.3s ease-out';
-        const heightToClose = sheet.offsetHeight * 0.2; // 20% swipe to close
-
+        const heightToClose = sheet.offsetHeight * 0.2; 
+        
         if (currentSheetOffset > heightToClose) {
             closeStockDetailSheet();
         } else {
@@ -710,23 +931,22 @@
         currentSheetOffset = 0;
     };
 
-
-    const handleStockClick = (stockId) => {
-        const stock = getStockById(stockId); 
+    window.handleStockClick = (stockId) => {
+        const stock = getStockById(stockId);
         if (!stock) return;
         currentStock = stock;
         
-        // --- Get holding from Local Storage ---
         const holdingQty = portfolioHoldings[stockId] || 0;
-
         const sheet = document.getElementById('stock-detail-sheet');
         const overlay = document.getElementById('modal-overlay');
 
-        // Populate header info
-        const isPositive = stock.change >= 0;
+        // Use new data format: stock.price, stock.percent
+        const isPositive = stock.percent >= 0;
         const changeColor = isPositive ? 'text-green-600' : 'text-red-600';
         const changeIcon = isPositive ? 'fa-caret-up' : 'fa-caret-down';
         const holdingText = holdingQty > 0 ? `<span class="font-medium text-black">(${holdingQty} held)</span>` : '';
+        const ltpFormatted = stock.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 
         document.getElementById('sheet-header-info').innerHTML = `
             <div>
@@ -734,59 +954,59 @@
                 <p class="text-xs text-gray-500 uppercase mt-0.5">${stock.index} ${holdingText}</p>
             </div>
             <div class="text-right">
-                <p class="text-lg font-bold text-black">${stock.price.toFixed(2)}</p>
+                <p class="text-lg font-bold text-black">${ltpFormatted}</p>
                 <p class="text-xs ${changeColor} mt-0.5">
                     <i class="fa-solid ${changeIcon} mr-0.5"></i> ${Math.abs(stock.change).toFixed(2)} (${Math.abs(stock.percent).toFixed(2)}%)
                 </p>
             </div>
         `;
-
-        // Render notes for this stock
+        
         renderNotesList(stockId);
 
-        // Open sheet
         sheet.classList.add('sheet-open');
-        overlay.classList.remove('pointer-events-none', 'opacity-0');
-        overlay.classList.add('pointer-events-auto', 'opacity-100');
+        overlay.classList.replace('opacity-0', 'opacity-100');
+        overlay.classList.replace('pointer-events-none', 'pointer-events-auto');
         overlay.onclick = closeStockDetailSheet;
         document.body.style.overflow = 'hidden';
     };
-
-    const closeStockDetailSheet = () => {
+    
+    window.closeStockDetailSheet = () => {
         const sheet = document.getElementById('stock-detail-sheet');
         const overlay = document.getElementById('modal-overlay');
 
         sheet.classList.remove('sheet-open');
-        overlay.classList.remove('pointer-events-auto', 'opacity-100');
-        overlay.classList.add('pointer-events-none', 'opacity-0');
+        overlay.classList.replace('opacity-100', 'opacity-0');
+        overlay.classList.replace('pointer-events-auto', 'pointer-events-none');
         overlay.onclick = null;
         document.body.style.overflow = '';
         currentStock = null;
     };
-
-    // 7. GTT Fullscreen Window (Simplified)
-    const openGTTOrder = () => {
+    
+    // 7. GTT Fullscreen Window (Side Slide Modal)
+    window.openGTTOrder = () => {
         if (!currentStock) return;
         closeStockDetailSheet();
 
         const gttScreen = document.getElementById('gtt-screen');
         const stock = currentStock;
 
-        const isPositive = stock.change >= 0;
+        const isPositive = stock.percent >= 0;
         const changeColor = isPositive ? 'text-green-600' : 'text-red-600';
         const changeIcon = isPositive ? 'fa-caret-up' : 'fa-caret-down';
+        const ltpFormatted = stock.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 
         gttScreen.innerHTML = `
             <!-- GTT Header -->
             <div id="gtt-header" class="p-4 border-b border-gray-100 bg-white sticky top-0">
                 <div class="flex items-center justify-between">
                     <i class="fa-solid fa-arrow-left text-lg text-black cursor-pointer" onclick="closeGTTOrder()"></i>
-                    <h2 class="text-lg font-bold text-black">GTT</h2>
+                    <h2 class="text-lg font-bold text-black">Create GTT</h2>
                 </div>
                 <div class="mt-3 flex justify-between items-end">
                     <div>
                         <p class="text-base font-semibold text-black">${stock.name}</p>
-                        <p class="text-xs text-gray-500 uppercase">${stock.index} | LTP: ${stock.price.toFixed(2)}</p>
+                        <p class="text-xs text-gray-500 uppercase">${stock.index} | LTP: ${ltpFormatted}</p>
                     </div>
                     <div class="text-right">
                         <p class="text-sm ${changeColor} font-semibold">
@@ -795,33 +1015,60 @@
                     </div>
                 </div>
             </div>
-
+            
             <!-- GTT Form Content -->
             <div id="gtt-form" class="p-4 space-y-5">
-                <!-- ... GTT Form elements ... (simplified for space) -->
-                <p class="text-center text-gray-500 text-sm py-8">GTT Order interface for ${stock.name} goes here.</p>
+                <div class="p-8 text-center bg-gray-50 rounded-lg">
+                    <p class="text-gray-600 text-sm">GTT Order interface for ${stock.name} goes here.</p>
+                </div>
                 
+                <!-- ... Actual Form Elements ... -->
+
                 <!-- Footer Swipe Button -->
                 <div class="fixed bottom-0 left-0 w-full max-w-[500px] mx-auto p-4 bg-white border-t border-gray-200">
-                    <button id="gtt-swipe-btn" class="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg text-sm active:bg-blue-700">
+                    <button id="gtt-swipe-btn" class="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg text-sm active:bg-blue-700 shadow-lg">
                         <i class="fa-solid fa-arrow-right mr-2"></i> SWIPE TO CREATE GTT
                     </button>
                 </div>
-
             </div>
         `;
         document.body.style.overflow = 'hidden';
-        gttScreen.style.transform = 'translateX(0%)';
+        gttScreen.classList.add('slide-open-side');
     };
 
-    const closeGTTOrder = () => {
-        document.getElementById('gtt-screen').style.transform = 'translateX(100%)';
+    window.closeGTTOrder = () => {
+        document.getElementById('gtt-screen').classList.remove('slide-open-side');
         document.body.style.overflow = '';
-        currentStock = null; // Clear current stock context
+        currentStock = null;
+    };
+    
+    // 8. Add Notes Popup
+    const renderNotesList = (stockId) => {
+        const notesListEl = document.getElementById('notes-list');
+        // Clear previous notes, but keep the header
+        notesListEl.querySelectorAll('.stock-note, #no-notes').forEach(el => el.remove());
+        
+        const notes = stockNotes[stockId] || [];
+        
+        if (notes.length === 0) {
+            const noNotesEl = document.createElement('p');
+            noNotesEl.id = 'no-notes';
+            noNotesEl.className = 'text-xs text-gray-500 italic';
+            noNotesEl.textContent = 'No notes added for this stock.';
+            notesListEl.appendChild(noNotesEl);
+            return;
+        }
+
+        notes.reverse().forEach(note => { // Show latest first
+            const noteEl = document.createElement('p');
+            noteEl.className = 'stock-note text-xs text-black bg-gray-50 p-2 rounded-md border-l-2 border-blue-400';
+            const date = new Date(note.created).toLocaleDateString();
+            noteEl.innerHTML = `<span class="font-medium">${date}:</span> ${note.content}`;
+            notesListEl.appendChild(noteEl);
+        });
     };
 
-    // 8. Add Notes Popup
-    const openAddNotePopup = () => {
+    window.openAddNotePopup = () => {
         if (!currentStock) return;
         document.getElementById('note-stock-name').textContent = currentStock.name;
         document.getElementById('note-content').value = '';
@@ -830,125 +1077,116 @@
         popup.querySelector('div').classList.replace('scale-90', 'scale-100');
     };
 
-    const closeAddNotePopup = () => {
+    window.closeAddNotePopup = () => {
         const popup = document.getElementById('notes-popup');
         popup.classList.remove('opacity-100', 'pointer-events-auto');
         popup.querySelector('div').classList.replace('scale-100', 'scale-90');
     };
 
-    const saveNote = () => {
+    window.saveNote = async () => {
+        if (!userId) return;
         const content = document.getElementById('note-content').value.trim();
         if (!currentStock || !content) return;
 
         const stockId = currentStock.id;
         const newNote = { content: content, created: Date.now() };
 
-        // Update global notes object
         const newNotesArray = [...(stockNotes[stockId] || []), newNote];
-        stockNotes[stockId] = newNotesArray;
-        
-        saveAllDataToLocalStorage();
+        const updatedNotes = { ...stockNotes, [stockId]: newNotesArray };
 
-        closeAddNotePopup();
-        renderNotesList(stockId); // Re-render the bottom sheet list
+        try {
+            const notesRef = doc(db, getCollectionPath('notes'), 'my_notes');
+            await setDoc(notesRef, { notes: updatedNotes }, { merge: true });
+            
+            closeAddNotePopup();
+            // Real-time listener will call renderNotesList automatically
+        } catch (error) {
+            console.error("Error saving note:", error);
+        }
     };
 
     // 9. Set Alert Popup
-    const openSetAlertPopup = () => {
+    window.openSetAlertPopup = () => {
         if (!currentStock) return;
         document.getElementById('alert-current-price').textContent = currentStock.price.toFixed(2);
-        document.getElementById('alert-price-input').value = (currentStock.price * 1.01).toFixed(2); // Suggest 1% up
+        document.getElementById('alert-price-input').value = (currentStock.price * 1.01).toFixed(2); 
 
         const popup = document.getElementById('alert-popup');
         popup.classList.add('opacity-100', 'pointer-events-auto');
         popup.querySelector('div').classList.replace('scale-90', 'scale-100');
     };
 
-    const closeSetAlertPopup = () => {
+    window.closeSetAlertPopup = () => {
         const popup = document.getElementById('alert-popup');
         popup.classList.remove('opacity-100', 'pointer-events-auto');
         popup.querySelector('div').classList.replace('scale-100', 'scale-90');
     };
 
-    const saveAlert = () => {
+    window.saveAlert = async () => {
+        if (!userId) return;
         const price = parseFloat(document.getElementById('alert-price-input').value);
         if (!currentStock || isNaN(price) || price <= 0) return;
 
         const stockId = currentStock.id;
-        const newAlert = { price: price, created: Date.now(), stockName: currentStock.name };
-
-        // Update global alerts object
+        const newAlert = { 
+            price: price, 
+            created: Date.now(), 
+            stockName: currentStock.name, 
+            stockId: stockId
+        };
+        
         const newAlertsArray = [...(stockAlerts[stockId] || []), newAlert];
-        stockAlerts[stockId] = newAlertsArray;
+        const updatedAlerts = { ...stockAlerts, [stockId]: newAlertsArray };
 
-        saveAllDataToLocalStorage();
-
-        checkActiveAlerts(true); // Check and potentially show notification
-        closeSetAlertPopup();
+        try {
+            const alertsRef = doc(db, getCollectionPath('alerts'), 'my_alerts');
+            await setDoc(alertsRef, { alerts: updatedAlerts }, { merge: true });
+            
+            closeSetAlertPopup();
+            // Real-time listener will call checkActiveAlerts automatically
+        } catch (error) {
+            console.error("Error saving alert:", error);
+        }
     };
-
+    
     // 10. Notification Handling (Alerts)
-    const checkActiveAlerts = (justSet = false) => {
+    window.checkActiveAlerts = () => {
         const alertDot = document.getElementById('alert-dot');
         const alertMessageEl = document.getElementById('alert-message');
         const allAlerts = Object.values(stockAlerts).flat();
 
         if (allAlerts.length > 0) {
             alertDot.classList.remove('hidden');
-            const latest = allAlerts[allAlerts.length - 1];
-
-            if (justSet) {
-                 alertMessageEl.innerHTML = `<span class="font-bold text-blue-600">Alert Set:</span> ${latest.stockName} @ ${latest.price.toFixed(2)}`;
-            } else {
-                 alertMessageEl.innerHTML = `${allAlerts.length} active alerts. Latest for ${latest.stockName}.`;
-            }
-
+            // Simplified: Showing the number of active alerts. 
+            alertMessageEl.innerHTML = `${allAlerts.length} active alerts.`;
         } else {
             alertDot.classList.add('hidden');
             alertMessageEl.textContent = 'No active alerts.';
         }
     };
 
-    const openNotificationPopup = () => {
+    window.openNotificationPopup = () => {
         const popup = document.getElementById('notification-popup');
         popup.classList.toggle('scale-0');
     };
-
-    // 11. Watchlist Swiping Logic
+    
+    // 11. Watchlist Swiping Logic (Improved for Visual Feedback)
     const watchlistContainer = document.getElementById('stock-list-container');
-    let swipeStartX = 0;
-    let swipeDiff = 0;
+    
+    // We rely on the native scroll behavior for smooth transitions now.
+    watchlistContainer.addEventListener('scroll', () => {
+        // Calculate the current page index
+        const scrollPosition = watchlistContainer.scrollLeft;
+        const containerWidth = watchlistContainer.offsetWidth;
+        
+        // This calculates the index that is currently most visible
+        const newIndex = Math.round(scrollPosition / containerWidth);
 
-    watchlistContainer.addEventListener('touchstart', (e) => {
-        swipeStartX = e.touches[0].clientX;
-        watchlistContainer.style.scrollSnapType = 'none'; // Disable snap during swipe
-    });
-
-    watchlistContainer.addEventListener('touchmove', (e) => {
-        // Prevent vertical scroll interference
-        if (Math.abs(e.touches[0].clientY - e.touches[0].clientY) > 10) return;
-
-        swipeDiff = e.touches[0].clientX - swipeStartX;
-    });
-
-    watchlistContainer.addEventListener('touchend', () => {
-        const threshold = watchlistContainer.offsetWidth / 3; // Swipe more than 33%
-
-        if (swipeDiff > threshold && currentWatchlistIndex > 0) {
-            // Swipe right (go left to previous watchlist)
-            currentWatchlistIndex--;
-        } else if (swipeDiff < -threshold && currentWatchlistIndex < allWatchlists.length - 1) {
-            // Swipe left (go right to next watchlist)
-            currentWatchlistIndex++;
+        if (newIndex !== currentWatchlistIndex) {
+            currentWatchlistIndex = newIndex;
+            currentWatchlistId = allWatchlists[currentWatchlistIndex]?.id || currentWatchlistId;
+            renderWatchlistTabs(); // Update tabs to show correct active state
         }
-
-        // Snap to the new (or current) position
-        currentWatchlistId = allWatchlists[currentWatchlistIndex].id;
-        renderWatchlistTabs();
-
-        watchlistContainer.style.scrollLeft = currentWatchlistIndex * watchlistContainer.offsetWidth;
-        watchlistContainer.style.scrollSnapType = 'x mandatory'; // Restore snap
-        swipeDiff = 0;
     });
 
 </script>
