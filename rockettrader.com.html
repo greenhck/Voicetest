@@ -338,7 +338,21 @@
     
     // Global Constants
     const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-    const FIREBASE_CONFIG = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+    
+    const USER_PROJECT_ID = "weview129"; // Project ID provided by the user
+    
+    let configFromEnv = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+
+    // Use environment config if available, otherwise construct a complete config using the user's project ID as the fallback.
+    const FIREBASE_CONFIG = {
+        apiKey: configFromEnv.apiKey || "mock-api-key",
+        authDomain: configFromEnv.authDomain || `${USER_PROJECT_ID}.firebaseapp.com`,
+        projectId: configFromEnv.projectId || USER_PROJECT_ID,
+        storageBucket: configFromEnv.storageBucket || `${USER_PROJECT_ID}.appspot.com`,
+        messagingSenderId: configFromEnv.messagingSenderId || "mock-sender-id",
+        appId: configFromEnv.appId || "mock-app-id"
+    };
+
     const INITIAL_AUTH_TOKEN = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
     // --- UTILITY FUNCTIONS ---
