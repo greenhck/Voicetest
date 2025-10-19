@@ -345,12 +345,13 @@
 
     // Use environment config if available, otherwise construct a complete config using the user's project ID as the fallback.
     const FIREBASE_CONFIG = {
-        apiKey: configFromEnv.apiKey || "mock-api-key",
+        // Removed explicit 'mock-api-key' to quiet down console warnings, rely on runtime for token.
+        apiKey: configFromEnv.apiKey || "", 
         authDomain: configFromEnv.authDomain || `${USER_PROJECT_ID}.firebaseapp.com`,
         projectId: configFromEnv.projectId || USER_PROJECT_ID,
         storageBucket: configFromEnv.storageBucket || `${USER_PROJECT_ID}.appspot.com`,
-        messagingSenderId: configFromEnv.messagingSenderId || "mock-sender-id",
-        appId: configFromEnv.appId || "mock-app-id"
+        messagingSenderId: configFromEnv.messagingSenderId || "",
+        appId: configFromEnv.appId || ""
     };
 
     const INITIAL_AUTH_TOKEN = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
@@ -358,16 +359,23 @@
     // --- UTILITY FUNCTIONS ---
     // Function to safely parse/clean up the new data format
     const formatStockData = (rawStock) => {
-        // Remove commas and parse percentage/LTP to number
-        const parseValue = (val) => parseFloat(String(val).replace(/,/g, '').replace('%', '').trim());
+        // CRITICAL FIX: Ensure rawStock.Name exists before calling toLowerCase().
+        const stockName = rawStock.Name || ''; 
 
-        const ltp = parseValue(rawStock.LTP) || 0;
-        const changePercent = parseValue(rawStock['Change(%)']) || 0;
+        // Function to safely parse a value, defaulting to 0
+        const parseValue = (val) => {
+             // Ensure val is not null/undefined, convert to string, remove commas and percent, then parse
+            const cleanedVal = String(val || '0').replace(/,/g, '').replace('%', '').trim();
+            return parseFloat(cleanedVal) || 0;
+        }
+
+        const ltp = parseValue(rawStock.LTP);
+        const changePercent = parseValue(rawStock['Change(%)']);
         const change = (ltp * (changePercent / 100)) || 0; // Estimate change value
 
         return {
-            id: rawStock.Name.toLowerCase().replace(/\s/g, '-'), // Unique ID
-            name: rawStock.Name,
+            id: stockName.toLowerCase().replace(/\s/g, '-'), // Use the safe stockName here
+            name: stockName,
             index: 'NSE', // Assuming default index
             price: ltp,
             change: change,
@@ -531,11 +539,20 @@
             const jsonResponse = await fetch('./marketdata.json'); 
             if (jsonResponse.ok) {
                 const rawData = await jsonResponse.json();
-                allStocksData = rawData.map(formatStockData);
-                console.log(`Successfully loaded ${allStocksData.length} stocks from marketdata.json.`);
+                // CRITICAL FIX: Check if rawData is an array before mapping
+                if (Array.isArray(rawData)) {
+                    allStocksData = rawData.map(formatStockData);
+                    console.log(`Successfully loaded ${allStocksData.length} stocks from marketdata.json.`);
+                } else {
+                    console.error("marketdata.json loaded but is not an array.");
+                }
             } else {
                 // Mock data if fetch fails (for demonstration)
-                const mockStocks = [{ "Name": "Reliance Industries", "LTP": "1,416.80", "Change(%)": "1.32%" }, { "Name": "Tata Consultancy Services", "LTP": "3,800.25", "Change(%)": "-0.55%" }, { "Name": "HDFC Bank", "LTP": "1,500.00", "Change(%)": "2.10%" }];
+                const mockStocks = [
+                    { "Name": "Reliance Industries", "LTP": "1,416.80", "Change(%)": "1.32%" }, 
+                    { "Name": "Tata Consultancy Services", "LTP": "3,800.25", "Change(%)": "-0.55%" }, 
+                    { "Name": "HDFC Bank", "LTP": "1,500.00", "Change(%)": "2.10%" }
+                ];
                 allStocksData = mockStocks.map(formatStockData);
                 console.warn("marketdata.json not found or failed to load. Using mock stock list.");
             }
