@@ -1,46 +1,25 @@
-name: Daily Market Data Sync
+name: Deploy to Firebase Hosting on merge
 
 on:
-  # Schedule to run every weekday (Mon-Fri) at 4:30 PM IST (11:00 UTC)
-  # This ensures the Bhavcopy data is likely available.
-  schedule:
-    - cron: '0 11 * * 1-5' # 11:00 UTC = 4:30 PM IST
-
-  # Manual trigger for debugging
-  workflow_dispatch:
-
-permissions:
-  contents: write
+  push:
+    branches:
+      - main
 
 jobs:
-  update-market-data:
+  build_and_deploy:
     runs-on: ubuntu-latest
-    
     steps:
-      # 1. Checkout the repository
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-          
-      # 2. Setup Node.js environment
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - name: Build and deploy
+        env:
+          VUE_APP_FIREBASE_API_KEY: ${{ secrets.STORE_API_KEY }}
+          CI: false # Prevents the build from failing on warnings in some frameworks like React
+        run: |
+          # The exact build command depends on your framework
+          npm install
+          npm run build
+      - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
-          node-version: '20'
-
-      # 3. Install necessary dependencies 
-      - name: Install Dependencies
-        # Need node-fetch for HTTP, and csv-parser for parsing the Bhavcopy.
-        run: npm install node-fetch csv-parser
-
-      # 4. Fetch and Process Real Bhavcopy Data
-      - name: Fetch and Process Real Bhavcopy Data
-        # This script downloads the ZIP, unzips, parses the CSV, and saves marketdata.json
-        run: node fetch_live_data.js
-
-      # 5. Commit and push the updated marketdata.json file
-      - name: Commit Files
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Data Sync: Updated ALL closing prices from NSE Bhavcopy"
-          files: "marketdata.json"
-          branch: main 
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          projectId: your-firebase-project-id
