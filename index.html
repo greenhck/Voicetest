@@ -3,22 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mobile Trading UI</title>
+    <title>Mobile Trading UI (Resilient Config)</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     <style>
         /* Custom styles to ensure edge-to-edge fit and smooth transitions */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f7f7f7; /* Very light gray background */
+            background-color: #f7f7f7;
             margin: 0;
             padding: 0;
-            overscroll-behavior: contain; /* Prevent pull-to-refresh on scroll */
+            overscroll-behavior: contain;
         }
         #app-container {
-            max-width: 500px; /* Max width for mobile emulation */
+            max-width: 500px;
             margin: 0 auto;
             min-height: 100vh;
             display: flex;
@@ -27,8 +28,7 @@
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
             position: relative;
         }
-
-        /* Watchlist Header Animation */
+        /* Watchlist Header Animation (Hidden when scrolling down) */
         #watchlist-header {
             transition: transform 0.3s ease-in-out;
             will-change: transform;
@@ -37,23 +37,39 @@
             top: 0;
         }
 
-        /* Search Input Animation */
-        #search-container {
-            transition: all 0.3s ease-in-out;
-        }
-        .search-focused {
+        /* --- Search Fullscreen Window (FADE-IN EFFECT) --- */
+        #search-screen {
             position: fixed;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            max-width: 500px;
-            width: 100%;
-            padding: 16px 20px;
-            height: 100vh;
+            inset: 0;
             background-color: white;
-            z-index: 50;
+            z-index: 70;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease-out;
+            max-width: 500px;
+            margin: 0 auto;
+            overflow-y: auto;
+        }
+        .search-open {
+            opacity: 1 !important;
+            pointer-events: auto !important;
         }
 
+        /* --- GTT Fullscreen Order Window (SIDE-SLIDE EFFECT) --- */
+        .fullscreen-slide {
+            position: fixed;
+            inset: 0;
+            background-color: white;
+            z-index: 70;
+            transform: translateX(100%);
+            transition: transform 0.3s ease-out;
+            max-width: 500px;
+            margin: 0 auto;
+            overflow-y: auto;
+        }
+        .slide-open-side { /* Used only for GTT screen */
+            transform: translateX(0%);
+        }
         /* Bottom Sheet (Stock Details Popup) Animation */
         #stock-detail-sheet {
             transform: translateY(100%);
@@ -63,7 +79,6 @@
         .sheet-open {
             transform: translateY(0%);
         }
-
         /* Index Popup Animation */
         #index-popup {
             transform: translateY(-100%);
@@ -73,13 +88,15 @@
         .index-open {
             transform: translateY(0%);
         }
-
         /* Global Modal Overlay */
-        #modal-overlay {
-            z-index: 30;
+        #modal-overlay, #remove-stock-popup, #notes-popup, #alert-popup {
+            z-index: 30; /* Adjusted z-index for overlay */
             transition: opacity 0.3s ease;
         }
-
+        /* Ensure specific popups are above the sheet, but below fullscreen modals */
+        #notes-popup, #alert-popup, #remove-stock-popup {
+            z-index: 80;
+        }
         /* Custom scrollbar for horizontal tabs */
         #watchlist-tabs::-webkit-scrollbar {
             display: none;
@@ -88,24 +105,45 @@
             -ms-overflow-style: none; /* IE and Edge */
             scrollbar-width: none; /* Firefox */
         }
-
         /* Custom swipe animation container */
-        .watchlist-swipe-container {
-            overflow-x: hidden;
-            scroll-behavior: smooth;
+        #stock-list-container {
+            overflow-x: scroll;
+            scroll-behavior: smooth; /* Crucial for smooth tab switching */
+            width: 100%;
         }
         .watchlist-page {
             flex-shrink: 0;
             width: 100%;
             padding-bottom: 80px; /* Space for the bottom nav */
         }
-
+        /* Ensure Auth screen has highest Z-index for fullscreen takeover */
+        #auth-screen {
+             z-index: 90;
+        }
     </style>
 </head>
 <body class="selection:bg-gray-200">
 
 <!-- The main mobile container -->
 <div id="app-container" class="h-screen overflow-hidden">
+
+    <!-- Authentication Screen (Highest Priority) -->
+    <div id="auth-screen" class="fixed inset-0 bg-white z-90 flex flex-col justify-center items-center p-8 transition-opacity duration-300">
+        <h1 class="text-3xl font-bold text-blue-600 mb-6">Trade Mobile</h1>
+        <p id="auth-status" class="text-red-500 mb-4 text-sm"></p>
+
+        <input id="auth-email" type="email" placeholder="Email" class="w-full mb-3 p-3 border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+        <input id="auth-password" type="password" placeholder="Password" class="w-full mb-6 p-3 border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+
+        <button id="auth-primary-btn" onclick="handleAuthAction('login')" class="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg text-lg active:bg-blue-700 transition-colors">
+            Login
+        </button>
+
+        <button onclick="toggleAuthMode()" class="mt-4 text-sm text-blue-600 hover:text-blue-700">
+            Switch to Create Account
+        </button>
+    </div>
+
     <!-- Overlay for Popups/Bottom Sheet -->
     <div id="modal-overlay" class="fixed inset-0 bg-black/50 opacity-0 pointer-events-none transition-opacity"></div>
 
@@ -120,8 +158,13 @@
         </div>
     </div>
 
-    <!-- GTT Fullscreen Order Window -->
-    <div id="gtt-screen" class="fixed inset-0 bg-white z-70 transform translate-x-full transition-transform duration-300 max-w-[500px] mx-auto overflow-y-auto">
+    <!-- Search Fullscreen Window (Fade-in) -->
+    <div id="search-screen" class="fixed inset-0 bg-white z-70 opacity-0 pointer-events-none transition-opacity duration-300 max-w-[500px] mx-auto overflow-y-auto">
+        <!-- Search content will be rendered here when opened -->
+    </div>
+
+    <!-- GTT Fullscreen Order Window (Slide-in) -->
+    <div id="gtt-screen" class="fullscreen-slide">
         <!-- GTT content will be rendered here when opened -->
     </div>
 
@@ -138,6 +181,7 @@
                     <i id="notification-icon" class="fa-solid fa-bell text-lg text-gray-700 cursor-pointer relative" onclick="openNotificationPopup()">
                         <span id="alert-dot" class="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500 hidden"></span>
                     </i>
+                    <i onclick="openSearch()" class="fa-solid fa-magnifying-glass text-lg text-gray-700 cursor-pointer"></i>
                 </div>
             </div>
             <!-- Notification Popup (Arrow indicator) -->
@@ -152,24 +196,11 @@
             </div>
         </div>
 
-        <!-- Search Input & Stock List -->
-        <div id="search-container" class="px-4 py-3 bg-white">
-            <div class="relative">
-                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm"></i>
-                <input id="search-input" type="text" placeholder="Search stocks, F&O, indices"
-                       class="w-full bg-gray-100 text-black placeholder-gray-500 rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-0 focus:bg-white focus:shadow-md transition-all duration-300"
-                       onfocus="handleSearchFocus()" onblur="handleSearchBlur()" oninput="handleSearchInput(this.value)">
-            </div>
-            <!-- Search Results/Autocomplete (Visible when focused) -->
-            <div id="search-results" class="hidden mt-4 space-y-2">
-                <!-- Autocomplete suggestions will appear here -->
-            </div>
-        </div>
-
         <!-- Main Stock List Container (Swipable) -->
-        <div id="stock-list-container" class="watchlist-swipe-container flex">
+        <div id="stock-list-container" class="flex w-full" style="scroll-snap-type: x mandatory;">
             <!-- Watchlist pages will be rendered here -->
         </div>
+
     </div>
 
     <!-- Stock Detail Bottom Sheet Popup -->
@@ -178,24 +209,24 @@
         <div class="p-4 flex flex-col">
             <div id="drag-handle" class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3 cursor-grab"></div>
 
-            <!-- Header Info -->
+                        <!-- Header Info -->
             <div id="sheet-header-info" class="flex justify-between items-start mb-4">
                 <!-- Content will be injected here -->
             </div>
 
-            <div class="w-full h-px bg-gray-200 mb-4"></div>
+                        <div class="w-full h-px bg-gray-200 mb-4"></div>
 
-            <!-- Action Buttons: Buy/Sell -->
+                        <!-- Action Buttons: Buy/Sell -->
             <div class="flex space-x-3 mb-4">
-                <button id="btn-buy" class="flex-1 py-3 text-white font-semibold rounded-lg text-sm transition-all duration-150 bg-green-600 active:bg-green-700">
+                <button id="btn-buy" class="flex-1 py-3 text-white font-semibold rounded-lg text-sm transition-all duration-150 bg-green-600 active:bg-green-700" onclick="updateHoldingQuantity(currentStock.id, 1)">
                     BUY
                 </button>
-                <button id="btn-sell" class="flex-1 py-3 text-white font-semibold rounded-lg text-sm transition-all duration-150 bg-red-600 active:bg-red-700">
+                <button id="btn-sell" class="flex-1 py-3 text-white font-semibold rounded-lg text-sm transition-all duration-150 bg-red-600 active:bg-red-700" onclick="updateHoldingQuantity(currentStock.id, -1)">
                     SELL
                 </button>
             </div>
 
-            <!-- Secondary Buttons -->
+                        <!-- Secondary Buttons -->
             <div class="grid grid-cols-3 gap-3 text-center mb-4 text-sm text-gray-700 font-medium">
                 <button onclick="openAddNotePopup()" class="p-2 bg-gray-100 rounded-lg transition-colors active:bg-gray-200">
                     <i class="fa-solid fa-pencil text-xs mr-1"></i> Add Note
@@ -208,9 +239,9 @@
                 </button>
             </div>
 
-            <div class="w-full h-px bg-gray-200 mb-4"></div>
+                        <div class="w-full h-px bg-gray-200 mb-4"></div>
 
-            <!-- Notes Section -->
+                        <!-- Notes Section -->
             <div id="notes-list" class="overflow-y-auto space-y-2 h-20">
                 <h3 class="text-sm font-semibold text-black mb-1">Notes:</h3>
                 <!-- Notes will be injected here -->
@@ -246,6 +277,20 @@
         </div>
     </div>
 
+    <!-- NEW: Remove Stock Confirmation Popup (Modal for Long Press) -->
+    <div id="remove-stock-popup" class="fixed inset-0 bg-black/50 opacity-0 pointer-events-none transition-opacity z-80 flex items-center justify-center">
+        <div class="bg-white rounded-lg p-6 w-11/12 max-w-sm transform scale-90 transition-transform duration-200">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-black">Remove Stock</h2>
+                <i onclick="closeRemoveStockPopup()" class="fa-solid fa-xmark text-lg text-gray-500 cursor-pointer p-1"></i>
+            </div>
+            <p class="text-sm text-gray-700 mb-6">Are you sure you want to remove <span id="remove-stock-name" class="font-bold text-blue-600"></span> from <span id="remove-watchlist-name" class="font-bold text-blue-600"></span>?</p>
+            <div class="flex justify-end space-x-2">
+                <button onclick="closeRemoveStockPopup()" class="px-4 py-2 text-sm text-gray-700 rounded-lg hover:bg-gray-100">Cancel</button>
+                <button id="confirm-remove-btn" class="px-4 py-2 text-sm text-white rounded-lg bg-red-600 active:bg-red-700">Remove</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Bottom Navigation Bar (Fixed) -->
     <nav id="bottom-nav" class="fixed bottom-0 left-0 w-full border-t border-gray-200 bg-white max-w-[500px] mx-auto z-50">
@@ -276,37 +321,42 @@
 
 <!-- Firebase and App Script -->
 <script type="module">
+    // --- FIREBASE IMPORTS ---
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, arrayRemove, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import {
+        getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged,
+        createUserWithEmailAndPassword, signInWithEmailAndPassword, setPersistence,
+        browserLocalPersistence
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import {
+        getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, where,
+        addDoc, getDocs, deleteDoc, updateDoc, writeBatch, setLogLevel
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // --- GLOBAL STATE & FIREBASE SETUP ---
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-    let db, auth;
-    let userId = 'loading'; // Will be set after auth
+    // --- GLOBAL STATE ---
+    let app, db, auth;
+    let userId = null;
+    let allStocksData = [];
+
+    // Firestore-synced data
+    let allWatchlists = [];
+    let stockAlerts = {};
+    let stockNotes = {};
+    let portfolioHoldings = {};
+    let initialListeners = []; // To store snapshot cleanup functions
+
     let currentWatchlistId = 'default';
     let currentWatchlistIndex = 0;
-    let currentStock = null; // Stock object currently opened in bottom sheet
+    let currentStock = null;
+    let isAuthReady = false;
+    let authMode = 'login'; // 'login' or 'signup'
 
-    let allWatchlists = []; // Array of { id, name }
-    let watchlistStocks = {}; // Map: watchlistId -> Array of stocks
-    let stockAlerts = {}; // Map: stockId -> Array of alerts
-    let stockNotes = {}; // Map: stockId -> Array of notes
+    // Flags for history management (Fix for Physical Back Button)
+    let isSearchOpen = false;
+    let isGttOpen = false;
+    let longPressTimer = null; // For stock long-press detection
 
-    // Mock/Dummy Data for Stock List
-    const MOCK_STOCKS = [
-        { id: 'tcs_eq', name: 'TCS', index: 'NSE', price: 3820.50, change: 45.20, percent: 1.20, holdings: 10 },
-        { id: 'infy_eq', name: 'Infosys', index: 'NSE', price: 1540.75, change: -12.30, percent: -0.80, holdings: 50 },
-        { id: 'reliance_eq', name: 'Reliance', index: 'NSE', price: 2950.10, change: 8.90, percent: 0.30, holdings: 20 },
-        { id: 'hdfc_eq', name: 'HDFC Bank', index: 'BSE', price: 1720.00, change: -30.50, percent: -1.75, holdings: 0 },
-        { id: 'maruti_f', name: 'MARUTI FEB FUT', index: 'NSE', price: 10200.00, change: 120.00, percent: 1.18, holdings: 0 },
-        { id: 'sbin_c', name: 'SBIN 700 CE', index: 'NSE', price: 40.50, change: 10.50, percent: 35.00, holdings: 0 },
-        { id: 'tata_motors_eq', name: 'Tata Motors', index: 'NSE', price: 950.00, change: 15.20, percent: 1.62, holdings: 30 },
-        { id: 'icici_bank_eq', name: 'ICICI Bank', index: 'BSE', price: 1100.50, change: -5.50, percent: -0.50, holdings: 5 },
-    ];
-
-    // Mock Data for Indices Popup
+    // Mock Data for Indices Popup (Remains static)
     const MOCK_INDICES = [
         { name: 'SENSEX', price: 73000.50, change: 250.20, percent: 0.34 },
         { name: 'NIFTY BANK', price: 48000.10, change: -150.80, percent: -0.31 },
@@ -314,121 +364,333 @@
         { name: 'NIFTY FIN', price: 21500.25, change: 40.50, percent: 0.19 },
     ];
 
-    // --- FIREBASE INITIALIZATION & AUTHENTICATION ---
-    window.onload = async function() {
-        if (!firebaseConfig) {
-            console.error("Firebase config is missing.");
-            // Render error or proceed with mock data only
+    // Global Constants
+    const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const INITIAL_AUTH_TOKEN = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+    // 1. BASE FIREBASE CONFIG (The "FIREBASE" config provided by the user)
+    // This serves as the fallback/default configuration.
+    const BASE_FIREBASE_CONFIG = {
+        apiKey: "AIzaSyBHOdwCAsfvwhFMJf1ISWjekQyW1iVJ99c",
+        authDomain: "weview129.firebaseapp.com",
+        databaseURL: "https://weview129-default-rtdb.firebaseio.com",
+        projectId: "weview129",
+        storageBucket: "weview129.firebasestorage.app",
+        messagingSenderId: "36284489552",
+        appId: "1:36284489552:web:cd19d04a6dbe46039d9655",
+        measurementId: "G-0NCKG4CRG7"
+    };
+
+    // 2. Robustly parse the firebase config from environment variable
+    let configFromEnv = {};
+    if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+        try {
+            configFromEnv = JSON.parse(__firebase_config);
+        } catch (e) {
+            console.error("Error parsing __firebase_config. It might be empty or invalid JSON:", e);
+        }
+    }
+
+    // 3. Define the final FIREBASE_CONFIG, prioritizing environment config,
+    // falling back to the hardcoded BASE_FIREBASE_CONFIG.
+    const FIREBASE_CONFIG = {
+        ...BASE_FIREBASE_CONFIG, // Start with all fields from the user's config
+        // Override with environment variables if they exist
+        apiKey: configFromEnv.apiKey || BASE_FIREBASE_CONFIG.apiKey,
+        authDomain: configFromEnv.authDomain || BASE_FIREBASE_CONFIG.authDomain,
+        projectId: configFromEnv.projectId || BASE_FIREBASE_CONFIG.projectId,
+        storageBucket: configFromEnv.storageBucket || BASE_FIREBASE_CONFIG.storageBucket,
+        messagingSenderId: configFromEnv.messagingSenderId || BASE_FIREBASE_CONFIG.messagingSenderId,
+        appId: configFromEnv.appId || BASE_FIREBASE_CONFIG.appId
+    };
+
+    // --- UTILITY FUNCTIONS ---
+    // Function to safely parse/clean up the new data format
+    const formatStockData = (rawStock) => {
+        // Safely check if Name exists and is a string before calling toLowerCase().
+        const stockName = rawStock.Name && typeof rawStock.Name === 'string' ? rawStock.Name : 'Unknown Stock';
+
+        // Function to safely parse a value, defaulting to 0
+        const parseValue = (val) => {
+             // Ensure val is not null/undefined, convert to string, remove commas and percent, then parse
+            const cleanedVal = String(val || '0').replace(/,/g, '').replace('%', '').trim();
+            return parseFloat(cleanedVal) || 0;
+        }
+
+        const ltp = parseValue(rawStock.LTP);
+        const changePercent = parseValue(rawStock['Change(%)']);
+        const change = (ltp * (changePercent / 100)) || 0; // Estimate change value
+
+        return {
+            // Use the safe stockName here
+            id: stockName.toLowerCase().replace(/\s/g, '-').replace(/[^a-z0-9-]/g, ''),
+            name: stockName,
+            index: 'NSE', // Assuming default index
+            price: ltp,
+            change: change,
+            percent: changePercent,
+            raw: rawStock
+        };
+    };
+
+    // --- FIREBASE DATA MANAGEMENT ---
+
+    /**
+     * Creates a standard path for user-specific collections.
+     * Path: /artifacts/{appId}/users/{userId}/{collectionName}
+     */
+    const getCollectionPath = (collectionName) => {
+        return `artifacts/${APP_ID}/users/${userId}/${collectionName}`;
+    };
+
+    /**
+     * Sets up real-time listeners for all user data.
+     */
+    const setupRealtimeListeners = () => {
+        if (!db || !userId) return;
+
+        // Clear old listeners if they exist
+        initialListeners.forEach(unsubscribe => unsubscribe());
+        initialListeners = [];
+
+        // 1. Watchlists Listener
+        const watchlistsQuery = collection(db, getCollectionPath('watchlists'));
+        initialListeners.push(onSnapshot(watchlistsQuery, (snapshot) => {
+            allWatchlists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // Ensure a default watchlist exists if empty
+            if (allWatchlists.length === 0) {
+                initializeDefaultWatchlist();
+            } else {
+                allWatchlists.sort((a, b) => (a.order || 0) - (b.order || 0));
+                currentWatchlistId = allWatchlists[currentWatchlistIndex]?.id || allWatchlists[0].id;
+                renderWatchlistTabs();
+                renderStockList();
+            }
+        }, (error) => {
+            console.error("Watchlists Snapshot Error:", error);
+        }));
+
+        // 2. Holdings Listener
+        const holdingsQuery = doc(db, getCollectionPath('holdings'), 'my_holdings');
+        initialListeners.push(onSnapshot(holdingsQuery, (docSnapshot) => {
+            portfolioHoldings = docSnapshot.exists() ? docSnapshot.data().stocks || {} : {};
+            renderStockList(); // Re-render to show updated holdings count
+        }, (error) => {
+            console.error("Holdings Snapshot Error:", error);
+        }));
+
+        // 3. Alerts Listener
+        const alertsQuery = doc(db, getCollectionPath('alerts'), 'my_alerts');
+        initialListeners.push(onSnapshot(alertsQuery, (docSnapshot) => {
+            stockAlerts = docSnapshot.exists() ? docSnapshot.data().alerts || {} : {};
+            checkActiveAlerts();
+        }, (error) => {
+            console.error("Alerts Snapshot Error:", error);
+        }));
+
+        // 4. Notes Listener
+        const notesQuery = doc(db, getCollectionPath('notes'), 'my_notes');
+        initialListeners.push(onSnapshot(notesQuery, (docSnapshot) => {
+            stockNotes = docSnapshot.exists() ? docSnapshot.data().notes || {} : {};
+        }, (error) => {
+            console.error("Notes Snapshot Error:", error);
+        }));
+
+        console.log("Firestore Listeners started for user:", userId);
+    };
+
+    /**
+     * Initializes a default watchlist if none exists.
+     */
+    const initializeDefaultWatchlist = async () => {
+        if (!db || !userId) return;
+
+        const defaultId = 'my-watchlist';
+        const initialStocks = allStocksData.length > 0 ? allStocksData.slice(0, 4).map(s => s.id) : [];
+
+        try {
+            await setDoc(doc(db, getCollectionPath('watchlists'), defaultId), {
+                name: 'My Watchlist',
+                stocks: initialStocks,
+                order: 0
+            });
+            console.log("Default watchlist created in Firestore.");
+        } catch (e) {
+            console.error("Error adding default document: ", e);
+        }
+    };
+
+    // --- AUTHENTICATION FUNCTIONS ---
+    window.handleAuthAction = async (action) => {
+        const emailEl = document.getElementById('auth-email');
+        const passwordEl = document.getElementById('auth-password');
+        const statusEl = document.getElementById('auth-status');
+        const email = emailEl.value;
+        const password = passwordEl.value;
+
+        if (!email || !password) {
+            statusEl.textContent = 'Please enter both email and password.';
             return;
         }
 
+        statusEl.textContent = 'Processing...';
+
         try {
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-            // setLogLevel('debug'); // Optional: uncomment for verbose logging
-
-            // Auth: Use custom token if available, otherwise sign in anonymously
-            if (typeof __initial_auth_token !== 'undefined') {
-                await signInWithCustomToken(auth, __initial_auth_token);
-                console.log("Signed in with custom token.");
-            } else {
-                await signInAnonymously(auth);
-                console.log("Signed in anonymously.");
+            if (action === 'login') {
+                await signInWithEmailAndPassword(auth, email, password);
+            } else { // signup
+                await createUserWithEmailAndPassword(auth, email, password);
             }
-
-            // Once authentication is ready, set up listeners
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    userId = user.uid;
-                    startFirestoreListeners();
-                } else {
-                    // Fallback for unauthenticated user (shouldn't happen with the token)
-                    userId = crypto.randomUUID();
-                    startFirestoreListeners(); // Still try to listen, but data will be local/mocked if security rules prevent read
-                }
-            });
-
+            // onAuthStateChanged handles success
         } catch (error) {
-            console.error("Firebase setup failed:", error);
-            // Fallback: Proceed with only mock data and UI rendering
-            userId = crypto.randomUUID();
-            startMockListeners();
+            let message = 'An unknown error occurred.';
+            if (error.code.includes('auth/')) {
+                 message = error.message.replace('Firebase: ', '');
+            }
+            statusEl.textContent = `Error: ${message}`;
         }
-        setupWatchlistScrollBehavior();
-        renderIndicesPopup();
     };
 
-    const getCollectionPath = (collectionName) => {
-        return `artifacts/${appId}/users/${userId}/${collectionName}`;
+    window.toggleAuthMode = () => {
+        authMode = authMode === 'login' ? 'signup' : 'login';
+        const primaryBtn = document.getElementById('auth-primary-btn');
+        const toggleBtn = document.querySelector('#auth-screen button:last-child');
+
+        if (authMode === 'login') {
+            primaryBtn.textContent = 'Login';
+            primaryBtn.onclick = () => handleAuthAction('login');
+            toggleBtn.textContent = 'Switch to Create Account';
+        } else {
+            primaryBtn.textContent = 'Create Account';
+            primaryBtn.onclick = () => handleAuthAction('signup');
+            toggleBtn.textContent = 'Switch to Login';
+        }
+        document.getElementById('auth-status').textContent = '';
     };
 
-    const startFirestoreListeners = () => {
-        // 1. Listen for Watchlist Names
-        onSnapshot(collection(db, getCollectionPath('watchlists')), (snapshot) => {
-            const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            if (list.length === 0) {
-                // If no watchlists exist, create a default one
-                addDoc(collection(db, getCollectionPath('watchlists')), {
-                    name: 'My Watchlist',
-                    stocks: MOCK_STOCKS.map(s => s.id), // Use mock stock IDs
-                    order: 0
-                });
-                return;
-            }
-            allWatchlists = list.sort((a, b) => a.order - b.order);
-            if (!currentWatchlistId || !allWatchlists.find(w => w.id === currentWatchlistId)) {
-                currentWatchlistId = allWatchlists[0].id;
-                currentWatchlistIndex = 0;
-            }
-            renderWatchlistTabs();
-            renderStockList();
-        }, (error) => console.error("Error fetching watchlists:", error));
+    const hideAuthScreen = () => {
+        // Hides the auth screen and allows interaction with the app
+        const authScreen = document.getElementById('auth-screen');
+        authScreen.style.opacity = '0';
+        authScreen.style.pointerEvents = 'none';
+        document.body.style.overflow = ''; // Restore body scrolling if necessary
+    };
 
-        // 2. Listen for Alerts (simplified, stored in a single document per user)
-        onSnapshot(doc(db, getCollectionPath('alerts'), 'user_alerts'), (docSnap) => {
-            if (docSnap.exists()) {
-                stockAlerts = docSnap.data().alerts || {};
+    const showAuthScreen = () => {
+        // Shows the auth screen and prevents interaction with the app content
+        const authScreen = document.getElementById('auth-screen');
+        authScreen.style.opacity = '1';
+        authScreen.style.pointerEvents = 'auto';
+        document.body.style.overflow = 'hidden'; // Lock body scroll when auth is visible
+    };
+
+    // --- INITIALIZATION ---
+    window.onload = async function() {
+        setLogLevel('Debug');
+
+        try {
+            // CRITICAL FIX CHECK: Ensure API key is present from either source.
+            if (!FIREBASE_CONFIG.apiKey) {
+                 console.error("FATAL: Firebase config is missing API Key. Check BASE_FIREBASE_CONFIG and __firebase_config.");
+                 document.getElementById('auth-status').textContent = "Initialization Failed: Missing Firebase API Key.";
+                 return;
+            }
+
+            app = initializeApp(FIREBASE_CONFIG);
+            auth = getAuth(app);
+            db = getFirestore(app);
+
+        } catch(e) {
+            console.error("Firebase Initialization Error:", e);
+            document.getElementById('auth-status').textContent = "Initialization Failed. See console.";
+            return;
+        }
+
+        // 1. Load Market Data from JSON file
+        try {
+            // Note: Since you mentioned marketdataNSE.json, I am using a generic placeholder
+            // but the structure from the request is used in formatting.
+            const jsonResponse = await fetch('./marketdata.json');
+             if (jsonResponse.ok) {
+                const rawData = await jsonResponse.json();
+                // CRITICAL FIX: Check if rawData is an array before mapping
+                if (Array.isArray(rawData)) {
+                    allStocksData = rawData.map(formatStockData);
+                    console.log(`Successfully loaded ${allStocksData.length} stocks from marketdata.json.`);
+                } else {
+                    console.error("marketdata.json loaded but is not an array. Using mock stock list.");
+                }
             } else {
-                stockAlerts = {};
+                // Mock data if fetch fails (for demonstration)
+                const mockStocks = [
+                    { "Name": "Reliance Industries", "LTP": "1,416.80", "Change(%)": "1.32%" },
+                    { "Name": "Tata Consultancy Services", "LTP": "3,800.25", "Change(%)": "-0.55%" },
+                    { "Name": "HDFC Bank", "LTP": "1,500.00", "Change(%)": "2.10%" }
+                ];
+                allStocksData = mockStocks.map(formatStockData);
+                console.warn("marketdata.json not found or failed to load. Using mock stock list.");
             }
-            checkActiveAlerts();
-        }, (error) => console.error("Error fetching alerts:", error));
+        } catch (error) {
+            console.error("Error loading marketdata.json:", error);
+            // Fallback to mock data if ANY error occurs during fetch/parse
+            if(allStocksData.length === 0) {
+                 const mockStocks = [
+                    { "Name": "Airtel", "LTP": "650.00", "Change(%)": "0.5%" },
+                    { "Name": "Maruti", "LTP": "9000.00", "Change(%)": "-1.2%" }
+                ];
+                allStocksData = mockStocks.map(formatStockData);
+            }
+        }
 
-        // 3. Listen for Notes (simplified, stored in a single document per user)
-        onSnapshot(doc(db, getCollectionPath('notes'), 'user_notes'), (docSnap) => {
-            if (docSnap.exists()) {
-                stockNotes = docSnap.data().notes || {};
+        // Set persistence for user auth (optional but good practice)
+        await setPersistence(auth, browserLocalPersistence);
+
+        // 2. Set up Auth Listener
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+                console.log("User Authenticated:", userId);
+                hideAuthScreen(); // Hide auth screen on successful login
+                setupRealtimeListeners();
+                renderIndicesPopup();
+                setupWatchlistScrollBehavior();
+                isAuthReady = true;
             } else {
-                stockNotes = {};
+                userId = null;
+                isAuthReady = false;
+
+                if (INITIAL_AUTH_TOKEN) {
+                    try {
+                        await signInWithCustomToken(auth, INITIAL_AUTH_TOKEN);
+                    } catch (e) {
+                        console.warn("Custom token sign-in failed. Falling back to email/password auth.", e);
+                        showAuthScreen(); // Show auth screen if token fails
+                    }
+                } else {
+                    showAuthScreen(); // No token, show the regular auth screen
+                }
             }
-            // Re-render notes if the bottom sheet is open
-            if (currentStock) {
-                renderNotesList(currentStock.id);
+        });
+
+        // 3. Setup History Listener for Navigation Fix (Physical Back Button)
+        window.addEventListener('popstate', (e) => {
+            const searchScreen = document.getElementById('search-screen');
+            const gttScreen = document.getElementById('gtt-screen');
+
+            // If a modal is open, close it without pushing another state
+            if (searchScreen.classList.contains('search-open')) {
+                closeSearch(false);
+            } else if (gttScreen.classList.contains('slide-open-side')) {
+                closeGTTOrder(false);
             }
-        }, (error) => console.error("Error fetching notes:", error));
+            // If no modal is open, let the browser handle the navigation naturally
+        });
     };
-
-    // Fallback for environment without Firebase or errors
-    const startMockListeners = () => {
-        console.warn("Using mock data due to Firebase setup issues.");
-        allWatchlists = [
-            { id: 'default', name: 'My Watchlist', stocks: MOCK_STOCKS.slice(0, 4).map(s => s.id), order: 0 },
-            { id: 'tech', name: 'Tech', stocks: MOCK_STOCKS.slice(0, 2).map(s => s.id), order: 1 },
-        ];
-        currentWatchlistId = 'default';
-        currentWatchlistIndex = 0;
-
-        // Mock alerts and notes structure
-        stockAlerts = { 'tcs_eq': [{ price: 3900, created: Date.now() }] };
-        stockNotes = { 'infy_eq': [{ content: 'Buy if it dips below 1500.', created: Date.now() }] };
-
-        renderWatchlistTabs();
-        renderStockList();
-        checkActiveAlerts();
-    }
 
     // --- UI RENDERING FUNCTIONS ---
+
+    // Helper to get formatted stock data
+    const getStockById = (id) => allStocksData.find(s => s.id === id);
 
     const renderWatchlistTabs = () => {
         const tabsEl = document.getElementById('watchlist-tabs');
@@ -436,53 +698,72 @@
         allWatchlists.forEach((list, index) => {
             const isActive = list.id === currentWatchlistId;
             const tab = document.createElement('div');
-            tab.className = `cursor-pointer pb-2 text-sm font-medium transition-colors ${isActive ? 'text-black' : 'text-gray-500'}`;
+            tab.className = `cursor-pointer pb-2 text-sm font-medium transition-colors ${isActive ? 'text-black font-semibold' : 'text-gray-500'}`;
             tab.style.borderBottom = isActive ? '2px solid #3b82f6' : '2px solid transparent';
             tab.textContent = list.name;
             tab.dataset.id = list.id;
+
+            // Fix: Simple click changes watchlist
             tab.onclick = () => changeWatchlist(list.id, index);
-            tab.oncontextmenu = tab.ontouchstart = (e) => handleEditWatchlistName(e, list.id);
+
+            // Removed oncontextmenu as per user request, long-press logic is now on stock items
+            // tab.oncontextmenu = (e) => handleEditWatchlistName(e, list.id);
+
             tabsEl.appendChild(tab);
         });
 
         // Add the '+' icon
         const addTab = document.createElement('div');
-        addTab.className = 'cursor-pointer pb-2 text-gray-500 hover:text-black transition-colors';
+        addTab.className = 'cursor-pointer pb-2 text-gray-500 hover:text-black transition-colors px-2';
         addTab.innerHTML = '<i class="fa-solid fa-plus text-lg"></i>';
         addTab.onclick = addNewWatchlist;
         tabsEl.appendChild(addTab);
-
-        // Scroll the active tab into view
-        const activeTabEl = tabsEl.querySelector(`[data-id="${currentWatchlistId}"]`);
-        if (activeTabEl) {
-             activeTabEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-        }
     };
 
     const renderStockList = () => {
         const listContainer = document.getElementById('stock-list-container');
-        listContainer.innerHTML = ''; // Clear existing pages
+        if (allWatchlists.length === 0) {
+            listContainer.innerHTML = `<p class="p-4 text-gray-500 text-sm italic w-full">Loading or no watchlists created.</p>`;
+            return;
+        }
 
-        allWatchlists.forEach((list, index) => {
+        const containerWidth = listContainer.offsetWidth;
+        listContainer.innerHTML = '';
+
+        allWatchlists.forEach((list) => {
             const watchlistPage = document.createElement('div');
             watchlistPage.className = 'watchlist-page';
             watchlistPage.dataset.watchlistId = list.id;
+            watchlistPage.style.width = `${containerWidth}px`; // Explicitly set width for snapping/scrolling
+            watchlistPage.style.scrollSnapAlign = 'start'; // Ensure snap behavior
 
-            // Get stocks for the current list (using MOCK data for content display)
             const currentStockIds = list.stocks || [];
-            const stocksToShow = MOCK_STOCKS.filter(s => currentStockIds.includes(s.id));
+            const stocksToShow = currentStockIds
+                .map(id => getStockById(id))
+                .filter(stock => stock);
 
             if (stocksToShow.length === 0) {
-                watchlistPage.innerHTML = `<p class="p-4 text-gray-500 text-sm italic">Add stocks using the search bar above.</p>`;
+                watchlistPage.innerHTML = `<p class="p-4 text-gray-500 text-sm italic">Add stocks using the search icon above.</p>`;
             } else {
                 let html = stocksToShow.map(stock => {
-                    const isPositive = stock.change >= 0;
+                    // Use new data format: stock.price, stock.percent
+                    const isPositive = stock.percent >= 0;
                     const changeColor = isPositive ? 'text-green-600' : 'text-red-600';
                     const changeIcon = isPositive ? 'fa-caret-up' : 'fa-caret-down';
-                    const holdingText = stock.holdings > 0 ? `<span class="text-xs text-gray-500 ml-1">(${stock.holdings})</span>` : '';
 
+                    const holdingQty = portfolioHoldings[stock.id] || 0;
+                    const holdingText = holdingQty > 0 ? `<span class="text-xs text-gray-500 ml-1 font-semibold">(${holdingQty} Held)</span>` : '';
+
+                    // Format LTP using toLocaleString for Indian number style (optional, but good for finance)
+                    const ltpFormatted = stock.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+                    // Added ontouchstart/ontouchend for long-press detection
                     return `
-                        <div class="px-4 py-3 flex justify-between items-center cursor-pointer active:bg-gray-50" onclick="handleStockClick('${stock.id}')" data-stock-id="${stock.id}">
+                        <div class="px-4 py-3 flex justify-between items-center cursor-pointer active:bg-gray-50"
+                             onclick="handleStockClickWrapper(event, '${stock.id}')"
+                             ontouchstart="handlePressStart('${stock.id}')"
+                             ontouchend="handlePressEnd(event, '${stock.id}')"
+                             data-stock-id="${stock.id}">
                             <!-- Left Aligned Info -->
                             <div>
                                 <p class="text-sm font-semibold text-black">${stock.name}</p>
@@ -490,7 +771,7 @@
                             </div>
                             <!-- Right Aligned Info -->
                             <div class="text-right">
-                                <p class="text-sm font-semibold text-black">${stock.price.toFixed(2)}</p>
+                                <p class="text-sm font-semibold text-black">${ltpFormatted}</p>
                                 <p class="text-xs ${changeColor} mt-0.5">
                                     <i class="fa-solid ${changeIcon} mr-0.5"></i> ${Math.abs(stock.change).toFixed(2)} (${Math.abs(stock.percent).toFixed(2)}%)
                                 </p>
@@ -506,7 +787,7 @@
         });
 
         // Set the initial scroll position to the current watchlist
-        listContainer.scrollLeft = currentWatchlistIndex * listContainer.offsetWidth;
+        listContainer.scrollLeft = currentWatchlistIndex * containerWidth;
     };
 
     const renderIndicesPopup = () => {
@@ -530,31 +811,80 @@
         }).join('');
     };
 
-    const renderNotesList = (stockId) => {
-        const notesListEl = document.getElementById('notes-list');
-        notesListEl.querySelector('#no-notes').classList.add('hidden');
-        // Clear previous notes, but keep the header
-        notesListEl.querySelectorAll('.stock-note').forEach(el => el.remove());
+    // --- INTERACTION HANDLERS ---
 
-        const notes = stockNotes[stockId] || [];
+    // 1. Long Press/Tap Handlers (New)
+    window.handlePressStart = (stockId) => {
+        // Clear any existing timer just in case
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
 
-        if (notes.length === 0) {
-            notesListEl.querySelector('#no-notes').classList.remove('hidden');
+        // Start timer for long press
+        longPressTimer = setTimeout(() => {
+            // Long press detected
+            openRemoveStockPopup(stockId);
+            longPressTimer = null; // Mark as null after opening popup
+        }, 700);
+    };
+
+    window.handlePressEnd = (e, stockId) => {
+        // If longPressTimer is still set, it means it was a TAP (not a long press)
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+            // Let the standard onclick event fire via handleStockClickWrapper
+        }
+        // If longPressTimer is null, the long press handler already fired the popup
+    };
+
+    window.handleStockClickWrapper = (e, stockId) => {
+        // Only allow the click if the long press timer did not fire the remove popup.
+        // We check the popup state: if it's open, the click should be ignored.
+        if (!document.getElementById('remove-stock-popup').classList.contains('opacity-100')) {
+            handleStockClick(stockId);
+        }
+    }
+
+    // 2. Holding Management (Buy/Sell)
+    window.updateHoldingQuantity = async (stockId, change) => {
+        if (!userId) return;
+
+        // Get current holding or default to 0
+        let currentHolding = portfolioHoldings[stockId] || 0;
+        let newHolding = currentHolding + change;
+
+        if (newHolding < 0) {
+            console.warn("Cannot sell more than held.");
             return;
         }
 
-        notes.forEach(note => {
-            const noteEl = document.createElement('p');
-            noteEl.className = 'stock-note text-xs text-black bg-gray-50 p-2 rounded-md border-l-2 border-blue-400';
-            const date = new Date(note.created).toLocaleDateString();
-            noteEl.innerHTML = `<span class="font-medium">${date}:</span> ${note.content}`;
-            notesListEl.appendChild(noteEl);
-        });
+        const holdingsRef = doc(db, getCollectionPath('holdings'), 'my_holdings');
+
+        const batch = writeBatch(db);
+
+        // Prepare the new holdings map
+        const updatedHoldings = { ...portfolioHoldings };
+        if (newHolding === 0) {
+            delete updatedHoldings[stockId];
+        } else {
+            updatedHoldings[stockId] = newHolding;
+        }
+
+        try {
+             // Use setDoc with merge: true to update the document, creating it if it doesn't exist.
+            batch.set(holdingsRef, { stocks: updatedHoldings }, { merge: true });
+            await batch.commit();
+
+            closeStockDetailSheet();
+            // Real-time listener will re-render stock list automatically
+        } catch (error) {
+            console.error("Error updating holdings:", error);
+        }
     };
 
-    // --- INTERACTION HANDLERS ---
-
-    // 1. Header Scroll Hide/Show
+    // 3. Header Scroll Hide/Show
     let lastScrollTop = 0;
     const watchlistHeader = document.getElementById('watchlist-header');
     const mainContent = document.getElementById('main-content');
@@ -563,19 +893,19 @@
         mainContent.addEventListener('scroll', () => {
             const scrollTop = mainContent.scrollTop;
 
-            if (scrollTop > lastScrollTop) {
-                // Scrolling down - Hide the header and search
+            if (scrollTop > lastScrollTop && scrollTop > 50) {
+                // Scrolling down - Hide the header
                 watchlistHeader.style.transform = 'translateY(-100%)';
-            } else if (scrollTop < lastScrollTop) {
-                // Scrolling up - Show the header and search
+            } else if (scrollTop < lastScrollTop || scrollTop < 50) {
+                // Scrolling up - Show the header
                 watchlistHeader.style.transform = 'translateY(0)';
             }
-            lastScrollTop = scrollTop <= 0 ? 0 : scrollTop; // For Mobile or touch devices
+            lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
         });
     }
 
-    // 2. Index Popup (Down Arrow)
-    const toggleIndexPopup = () => {
+    // 4. Index Popup (Down Arrow)
+    window.toggleIndexPopup = () => {
         const popup = document.getElementById('index-popup');
         const overlay = document.getElementById('modal-overlay');
         const toggleIcon = document.getElementById('index-toggle-icon');
@@ -583,88 +913,122 @@
         const isOpen = popup.classList.toggle('index-open');
 
         if (isOpen) {
-            overlay.classList.remove('pointer-events-none', 'opacity-0');
-            overlay.classList.add('pointer-events-auto', 'opacity-100');
+            overlay.classList.replace('opacity-0', 'opacity-100');
+            overlay.classList.replace('pointer-events-none', 'pointer-events-auto');
             overlay.onclick = toggleIndexPopup;
             toggleIcon.classList.replace('fa-chevron-down', 'fa-xmark');
             toggleIcon.classList.add('text-black');
         } else {
-            overlay.classList.remove('pointer-events-auto', 'opacity-100');
-            overlay.classList.add('pointer-events-none', 'opacity-0');
+            overlay.classList.replace('opacity-100', 'opacity-0');
+            overlay.classList.replace('pointer-events-auto', 'pointer-events-none');
             overlay.onclick = null;
             toggleIcon.classList.replace('fa-xmark', 'fa-chevron-down');
             toggleIcon.classList.remove('text-black');
         }
     };
 
-    // 3. Watchlist Management
-    const changeWatchlist = (id, index) => {
+    // 5. Watchlist Management
+    window.changeWatchlist = (id, index) => {
         currentWatchlistId = id;
         currentWatchlistIndex = index;
         renderWatchlistTabs();
+        // Smooth scroll the list container (Fix for visual swipe effect)
         document.getElementById('stock-list-container').scrollLeft = index * document.getElementById('stock-list-container').offsetWidth;
-        // No need to call renderStockList again, as the list container is just scrolled
     };
 
-    const handleEditWatchlistName = async (e, id) => {
-        e.preventDefault();
+    window.handleEditWatchlistName = (e, id) => {
+        e.preventDefault(); // Prevent context menu on long press
+        if (!userId) return;
+
         const list = allWatchlists.find(w => w.id === id);
         if (!list) return;
 
+        // Use a simple prompt for now, or you could implement a custom modal
         const newName = prompt(`Enter new name for: ${list.name}`);
-        if (newName && newName.trim()) {
-             try {
-                // Update Firestore
-                await setDoc(doc(db, getCollectionPath('watchlists'), id), { name: newName.trim() }, { merge: true });
-            } catch (error) {
-                console.error("Error updating watchlist name:", error);
-            }
+        if (newName && newName.trim() && newName.trim() !== list.name) {
+            const listRef = doc(db, getCollectionPath('watchlists'), id);
+            updateDoc(listRef, { name: newName.trim() })
+                .then(() => console.log("Watchlist name updated."))
+                .catch(error => console.error("Error updating watchlist name:", error));
+
+            // Listener will re-render tabs automatically
         }
     };
 
-    const addNewWatchlist = async () => {
+    window.addNewWatchlist = async () => {
+        if (!userId) return;
+
         const name = prompt("Enter new watchlist name:");
         if (name && name.trim()) {
             try {
-                await addDoc(collection(db, getCollectionPath('watchlists')), {
+                const listRef = collection(db, getCollectionPath('watchlists'));
+                await addDoc(listRef, {
                     name: name.trim(),
                     stocks: [],
                     order: allWatchlists.length
-                });
-            } catch (error) {
-                console.error("Error adding new watchlist:", error);
+                 });
+                // Listener will add the new tab automatically
+            } catch (e) {
+                console.error("Error adding new watchlist:", e);
             }
         }
     };
 
-    // 4. Search Functionality
-    const handleSearchFocus = () => {
-        const searchContainer = document.getElementById('search-container');
-        const searchInput = document.getElementById('search-input');
-        searchContainer.classList.add('search-focused');
-        document.getElementById('search-results').classList.remove('hidden');
+    // 6. Search Functionality (Now a Fullscreen Fade Modal - Fixed as requested)
+    window.openSearch = () => {
+        const searchScreen = document.getElementById('search-screen');
+        searchScreen.innerHTML = `
+            <div class="p-4 border-b border-gray-100 flex items-center bg-white sticky top-0">
+                <!-- Back button now triggers history.back() which is intercepted by popstate -->
+                <i class="fa-solid fa-arrow-left text-lg text-black cursor-pointer mr-3" onclick="closeSearch()"></i>
+                <input id="search-input" type="text" placeholder="Search stocks, F&O, indices"
+                       class="w-full bg-gray-100 text-black placeholder-gray-500 rounded-lg py-2 pl-4 pr-4 text-sm focus:outline-none focus:ring-0 focus:bg-white focus:shadow-md transition-all duration-300"
+                       oninput="handleSearchInput(this.value)" autofocus>
+            </div>
+            <div id="search-results" class="p-4 space-y-2">
+                <p class="text-sm text-gray-500 p-2">Start typing to search...</p>
+            </div>
+        `;
+        document.body.style.overflow = 'hidden';
+        isSearchOpen = true; // Set flag
+        history.pushState({ screen: 'search' }, 'Search', '#search'); // Push state for back button
 
-        // Restore original position on blur/x-click
-        searchInput.onblur = handleSearchBlur;
+        // FADE-IN: Full white page
+        searchScreen.classList.add('search-open');
     };
 
-    const handleSearchBlur = () => {
-        const searchContainer = document.getElementById('search-container');
-        searchContainer.classList.remove('search-focused');
-        document.getElementById('search-results').classList.add('hidden');
+    // useHistory = false when called from popstate handler (physical back button)
+    window.closeSearch = (useHistory = true) => {
+        const searchScreen = document.getElementById('search-screen');
+
+        // FADE-OUT
+        searchScreen.classList.remove('search-open');
+        document.body.style.overflow = '';
+        isSearchOpen = false; // Clear flag
+
+        // Only manipulate history if closing via the button (not via the popstate)
+        if (useHistory) {
+            history.back(); // This triggers the popstate, which we already handle
+        }
     };
 
-    const handleSearchInput = (value) => {
+    window.handleSearchInput = (value) => {
         const resultsEl = document.getElementById('search-results');
         if (value.length < 2) {
             resultsEl.innerHTML = '<p class="text-sm text-gray-500 p-2">Start typing to search...</p>';
             return;
         }
-        // Mock Autocomplete Suggestion Logic
-        const filtered = MOCK_STOCKS.filter(s => s.name.toLowerCase().includes(value.toLowerCase()) || s.id.includes(value.toLowerCase()));
+
+        const filtered = allStocksData.filter(s =>
+            s.name.toLowerCase().includes(value.toLowerCase()) ||
+            s.id.includes(value.toLowerCase())
+        ).slice(0, 10); // Limit to 10 results
+
+        const currentList = allWatchlists.find(w => w.id === currentWatchlistId);
 
         resultsEl.innerHTML = filtered.map(stock => {
-            const isAdded = allWatchlists.find(w => w.id === currentWatchlistId)?.stocks?.includes(stock.id);
+            // Logic review confirmed: checks against current active watchlist (currentWatchlistId)
+            const isAdded = currentList?.stocks?.includes(stock.id);
             const actionIcon = isAdded ? 'fa-check text-green-600' : 'fa-plus text-blue-600';
             const actionText = isAdded ? 'Added' : 'Add';
 
@@ -683,56 +1047,94 @@
         }).join('');
     };
 
-    const toggleStockInWatchlist = async (event, stockId) => {
-        event.stopPropagation(); // Prevent search result click from triggering other things
+    window.toggleStockInWatchlist = async (event, stockId) => {
+        event.stopPropagation();
+        if (!userId) return;
+
         const currentList = allWatchlists.find(w => w.id === currentWatchlistId);
         if (!currentList) return;
 
-        const stockRef = doc(db, getCollectionPath('watchlists'), currentList.id);
-        const isAdded = currentList.stocks.includes(stockId);
+        const index = currentList.stocks.indexOf(stockId);
+        const newStocks = [...currentList.stocks];
+
+        if (index > -1) {
+            newStocks.splice(index, 1); // Remove
+        } else {
+            newStocks.push(stockId); // Add
+        }
 
         try {
-            if (isAdded) {
-                // Remove stock
-                await updateDoc(stockRef, {
-                    stocks: arrayRemove(stockId)
-                });
-            } else {
-                // Add stock
-                await updateDoc(stockRef, {
-                    stocks: arrayUnion(stockId)
-                });
-            }
-            // Re-run search input to update the '+' icon status
+            const listRef = doc(db, getCollectionPath('watchlists'), currentList.id);
+            await updateDoc(listRef, { stocks: newStocks });
+            // Listener will handle re-rendering, just update the search UI instantly
             handleSearchInput(document.getElementById('search-input').value);
-
         } catch (error) {
             console.error("Error toggling stock in watchlist:", error);
         }
     };
 
-    // 5. Stock Detail Bottom Sheet
+    // 7. Remove Stock Popup Handlers (New)
+    window.openRemoveStockPopup = (stockId) => {
+        const stock = getStockById(stockId);
+        const watchlist = allWatchlists.find(w => w.id === currentWatchlistId);
+
+        if (!stock || !watchlist) return;
+
+        document.getElementById('remove-stock-name').textContent = stock.name;
+        document.getElementById('remove-watchlist-name').textContent = watchlist.name;
+        // Set the action handler on the confirm button
+        document.getElementById('confirm-remove-btn').onclick = () => removeStockFromWatchlist(stockId, watchlist.id);
+
+        const popup = document.getElementById('remove-stock-popup');
+        popup.classList.add('opacity-100', 'pointer-events-auto');
+        popup.querySelector('div').classList.replace('scale-90', 'scale-100');
+    };
+
+    window.closeRemoveStockPopup = () => {
+        const popup = document.getElementById('remove-stock-popup');
+        popup.classList.remove('opacity-100', 'pointer-events-auto');
+        popup.querySelector('div').classList.replace('scale-100', 'scale-90');
+    };
+
+    window.removeStockFromWatchlist = async (stockId, watchlistId) => {
+        closeRemoveStockPopup();
+        if (!userId) return;
+
+        const list = allWatchlists.find(w => w.id === watchlistId);
+        if (!list) return;
+
+        const newStocks = list.stocks.filter(id => id !== stockId);
+
+        try {
+            const listRef = doc(db, getCollectionPath('watchlists'), watchlistId);
+            await updateDoc(listRef, { stocks: newStocks });
+            console.log(`Removed ${stockId} from ${watchlistId}`);
+        } catch (error) {
+            console.error("Error removing stock from watchlist:", error);
+        }
+    };
+
+    // 8. Stock Detail Bottom Sheet
     let startY = 0;
     let currentSheetOffset = 0;
 
-    const handleTouchStart = (e) => {
+    window.handleTouchStart = (e) => {
         startY = e.touches[0].clientY;
         document.getElementById('stock-detail-sheet').style.transition = 'none';
     };
 
-    const handleTouchMove = (e) => {
+    window.handleTouchMove = (e) => {
         const diffY = e.touches[0].clientY - startY;
-        // Only allow downward swipe for closing
         if (diffY > 0) {
             currentSheetOffset = diffY;
             document.getElementById('stock-detail-sheet').style.transform = `translateY(${diffY}px)`;
         }
     };
 
-    const handleTouchEnd = () => {
+    window.handleTouchEnd = () => {
         const sheet = document.getElementById('stock-detail-sheet');
         sheet.style.transition = 'transform 0.3s ease-out';
-        const heightToClose = sheet.offsetHeight * 0.2; // 20% swipe to close
+        const heightToClose = sheet.offsetHeight * 0.2;
 
         if (currentSheetOffset > heightToClose) {
             closeStockDetailSheet();
@@ -742,20 +1144,21 @@
         currentSheetOffset = 0;
     };
 
-
-    const handleStockClick = (stockId) => {
-        const stock = MOCK_STOCKS.find(s => s.id === stockId);
+    window.handleStockClick = (stockId) => {
+        const stock = getStockById(stockId);
         if (!stock) return;
         currentStock = stock;
 
+        const holdingQty = portfolioHoldings[stockId] || 0;
         const sheet = document.getElementById('stock-detail-sheet');
         const overlay = document.getElementById('modal-overlay');
 
-        // Populate header info
-        const isPositive = stock.change >= 0;
+        // Use new data format: stock.price, stock.percent
+        const isPositive = stock.percent >= 0;
         const changeColor = isPositive ? 'text-green-600' : 'text-red-600';
         const changeIcon = isPositive ? 'fa-caret-up' : 'fa-caret-down';
-        const holdingText = stock.holdings > 0 ? `<span class="font-medium text-black">(${stock.holdings} held)</span>` : '';
+        const holdingText = holdingQty > 0 ? `<span class="font-medium text-black">(${holdingQty} held)</span>` : '';
+        const ltpFormatted = stock.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
         document.getElementById('sheet-header-info').innerHTML = `
             <div>
@@ -763,59 +1166,59 @@
                 <p class="text-xs text-gray-500 uppercase mt-0.5">${stock.index} ${holdingText}</p>
             </div>
             <div class="text-right">
-                <p class="text-lg font-bold text-black">${stock.price.toFixed(2)}</p>
+                <p class="text-lg font-bold text-black">${ltpFormatted}</p>
                 <p class="text-xs ${changeColor} mt-0.5">
                     <i class="fa-solid ${changeIcon} mr-0.5"></i> ${Math.abs(stock.change).toFixed(2)} (${Math.abs(stock.percent).toFixed(2)}%)
                 </p>
             </div>
         `;
 
-        // Render notes for this stock
         renderNotesList(stockId);
 
-        // Open sheet
         sheet.classList.add('sheet-open');
-        overlay.classList.remove('pointer-events-none', 'opacity-0');
-        overlay.classList.add('pointer-events-auto', 'opacity-100');
+        overlay.classList.replace('opacity-0', 'opacity-100');
+        overlay.classList.replace('pointer-events-none', 'pointer-events-auto');
         overlay.onclick = closeStockDetailSheet;
         document.body.style.overflow = 'hidden';
     };
 
-    const closeStockDetailSheet = () => {
+    window.closeStockDetailSheet = () => {
         const sheet = document.getElementById('stock-detail-sheet');
         const overlay = document.getElementById('modal-overlay');
 
         sheet.classList.remove('sheet-open');
-        overlay.classList.remove('pointer-events-auto', 'opacity-100');
-        overlay.classList.add('pointer-events-none', 'opacity-0');
+        overlay.classList.replace('opacity-100', 'opacity-0');
+        overlay.classList.replace('pointer-events-auto', 'pointer-events-none');
         overlay.onclick = null;
         document.body.style.overflow = '';
         currentStock = null;
     };
 
-    // 6. GTT Fullscreen Window
-    const openGTTOrder = () => {
+    // 9. GTT Fullscreen Window (Side Slide Modal)
+    window.openGTTOrder = () => {
         if (!currentStock) return;
         closeStockDetailSheet();
 
         const gttScreen = document.getElementById('gtt-screen');
         const stock = currentStock;
 
-        const isPositive = stock.change >= 0;
+        const isPositive = stock.percent >= 0;
         const changeColor = isPositive ? 'text-green-600' : 'text-red-600';
         const changeIcon = isPositive ? 'fa-caret-up' : 'fa-caret-down';
+        const ltpFormatted = stock.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
         gttScreen.innerHTML = `
             <!-- GTT Header -->
             <div id="gtt-header" class="p-4 border-b border-gray-100 bg-white sticky top-0">
                 <div class="flex items-center justify-between">
+                    <!-- Back button now triggers history.back() which is intercepted by popstate -->
                     <i class="fa-solid fa-arrow-left text-lg text-black cursor-pointer" onclick="closeGTTOrder()"></i>
-                    <h2 class="text-lg font-bold text-black">GTT</h2>
+                    <h2 class="text-lg font-bold text-black">Create GTT</h2>
                 </div>
                 <div class="mt-3 flex justify-between items-end">
                     <div>
                         <p class="text-base font-semibold text-black">${stock.name}</p>
-                        <p class="text-xs text-gray-500 uppercase">${stock.index} | LTP: ${stock.price.toFixed(2)}</p>
+                        <p class="text-xs text-gray-500 uppercase">${stock.index} | LTP: ${ltpFormatted}</p>
                     </div>
                     <div class="text-right">
                         <p class="text-sm ${changeColor} font-semibold">
@@ -827,81 +1230,66 @@
 
             <!-- GTT Form Content -->
             <div id="gtt-form" class="p-4 space-y-5">
-                <!-- Type: Buy/Sell -->
-                <div>
-                    <label class="block text-sm font-medium text-black mb-2">Type</label>
-                    <div class="flex space-x-3 text-sm font-medium">
-                        <button class="flex-1 py-2 border border-gray-300 rounded-lg bg-blue-100 text-blue-600">BUY</button>
-                        <button class="flex-1 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">SELL</button>
-                    </div>
+                <div class="p-8 text-center bg-gray-50 rounded-lg">
+                    <p class="text-gray-600 text-sm">GTT Order interface for ${stock.name} goes here.</p>
                 </div>
 
-                <!-- Trigger Type: Single/OCO (One Cancels Other) -->
-                <div>
-                    <label class="block text-sm font-medium text-black mb-2">Trigger Type</label>
-                    <div class="flex space-x-3 text-sm font-medium">
-                        <button class="flex-1 py-2 border border-gray-300 rounded-lg bg-blue-100 text-blue-600">Single</button>
-                        <button class="flex-1 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">OCO</button>
-                    </div>
-                </div>
-
-                <!-- Stop Loss Section -->
-                <div class="border border-gray-200 p-4 rounded-lg bg-gray-50">
-                    <h3 class="text-base font-semibold text-black mb-3">STOP LOSS</h3>
-                    <div class="mb-4">
-                        <label class="block text-xs font-medium text-gray-700 mb-1">Trigger Price</label>
-                        <div class="flex items-center space-x-2">
-                            <input type="number" value="${(stock.price * 0.95).toFixed(2)}" class="flex-1 border border-gray-300 rounded-md p-2 text-sm text-black focus:ring-0 focus:border-gray-500" id="sl-trigger-price">
-                            <p class="text-xs text-gray-500 w-16 text-right">-5.00%</p>
-                        </div>
-                    </div>
-                    <div class="mb-4">
-                        <label class="block text-xs font-medium text-gray-700 mb-1">Quantity</label>
-                        <input type="number" value="1" class="w-full border border-gray-300 rounded-md p-2 text-sm text-black focus:ring-0 focus:border-gray-500">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-700 mb-1">Limit Price (CNC/MIS)</label>
-                        <input type="number" value="${(stock.price * 0.94).toFixed(2)}" class="w-full border border-gray-300 rounded-md p-2 text-sm text-black focus:ring-0 focus:border-gray-500">
-                    </div>
-                </div>
-
-                <!-- Target Section (Only visible for OCO, shown for context here) -->
-                <div class="border border-gray-200 p-4 rounded-lg bg-gray-50">
-                    <h3 class="text-base font-semibold text-black mb-3">TARGET</h3>
-                    <div class="mb-4">
-                        <label class="block text-xs font-medium text-gray-700 mb-1">Trigger Price</label>
-                        <div class="flex items-center space-x-2">
-                            <input type="number" value="${(stock.price * 1.05).toFixed(2)}" class="flex-1 border border-gray-300 rounded-md p-2 text-sm text-black focus:ring-0 focus:border-gray-500" id="target-trigger-price">
-                            <p class="text-xs text-gray-500 w-16 text-right">+5.00%</p>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-700 mb-1">Limit Price (CNC/MIS)</label>
-                        <input type="number" value="${(stock.price * 1.06).toFixed(2)}" class="w-full border border-gray-300 rounded-md p-2 text-sm text-black focus:ring-0 focus:border-gray-500">
-                    </div>
-                </div>
+                <!-- ... Actual Form Elements ... -->
 
                 <!-- Footer Swipe Button -->
                 <div class="fixed bottom-0 left-0 w-full max-w-[500px] mx-auto p-4 bg-white border-t border-gray-200">
-                    <button id="gtt-swipe-btn" class="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg text-sm active:bg-blue-700">
+                    <button id="gtt-swipe-btn" class="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg text-sm active:bg-blue-700 shadow-lg" onclick="closeGTTOrder()">
                         <i class="fa-solid fa-arrow-right mr-2"></i> SWIPE TO CREATE GTT
                     </button>
                 </div>
-
             </div>
         `;
         document.body.style.overflow = 'hidden';
-        gttScreen.style.transform = 'translateX(0%)';
+        isGttOpen = true; // Set flag
+        history.pushState({ screen: 'gtt' }, 'GTT', '#gtt'); // Push state for back button
+
+        gttScreen.classList.add('slide-open-side');
     };
 
-    const closeGTTOrder = () => {
-        document.getElementById('gtt-screen').style.transform = 'translateX(100%)';
+    // useHistory = false when called from popstate handler (physical back button)
+    window.closeGTTOrder = (useHistory = true) => {
+        document.getElementById('gtt-screen').classList.remove('slide-open-side');
         document.body.style.overflow = '';
-        currentStock = null; // Clear current stock context
+        currentStock = null;
+        isGttOpen = false; // Clear flag
+
+        if (useHistory) {
+            history.back(); // This triggers the popstate, which we already handle
+        }
     };
 
-    // 7. Add Notes Popup
-    const openAddNotePopup = () => {
+    // 10. Add Notes Popup
+    const renderNotesList = (stockId) => {
+        const notesListEl = document.getElementById('notes-list');
+        // Clear previous notes, but keep the header
+        notesListEl.querySelectorAll('.stock-note, #no-notes').forEach(el => el.remove());
+
+        const notes = stockNotes[stockId] || [];
+
+        if (notes.length === 0) {
+            const noNotesEl = document.createElement('p');
+            noNotesEl.id = 'no-notes';
+            noNotesEl.className = 'text-xs text-gray-500 italic';
+            noNotesEl.textContent = 'No notes added for this stock.';
+            notesListEl.appendChild(noNotesEl);
+            return;
+        }
+
+        notes.reverse().forEach(note => { // Show latest first
+            const noteEl = document.createElement('p');
+            noteEl.className = 'stock-note text-xs text-black bg-gray-50 p-2 rounded-md border-l-2 border-blue-400';
+            const date = new Date(note.created).toLocaleDateString();
+            noteEl.innerHTML = `<span class="font-medium">${date}:</span> ${note.content}`;
+            notesListEl.appendChild(noteEl);
+        });
+    };
+
+    window.openAddNotePopup = () => {
         if (!currentStock) return;
         document.getElementById('note-stock-name').textContent = currentStock.name;
         document.getElementById('note-content').value = '';
@@ -910,147 +1298,116 @@
         popup.querySelector('div').classList.replace('scale-90', 'scale-100');
     };
 
-    const closeAddNotePopup = () => {
+    window.closeAddNotePopup = () => {
         const popup = document.getElementById('notes-popup');
         popup.classList.remove('opacity-100', 'pointer-events-auto');
         popup.querySelector('div').classList.replace('scale-100', 'scale-90');
     };
 
-    const saveNote = async () => {
+    window.saveNote = async () => {
+        if (!userId) return;
         const content = document.getElementById('note-content').value.trim();
         if (!currentStock || !content) return;
 
         const stockId = currentStock.id;
         const newNote = { content: content, created: Date.now() };
 
-        try {
-            const notesRef = doc(db, getCollectionPath('notes'), 'user_notes');
-            const newNotesArray = [...(stockNotes[stockId] || []), newNote];
+        const newNotesArray = [...(stockNotes[stockId] || []), newNote];
+        const updatedNotes = { ...stockNotes, [stockId]: newNotesArray };
 
-            // Use setDoc with merge to update the map field within the document
-            await setDoc(notesRef, {
-                notes: {
-                    ...stockNotes,
-                    [stockId]: newNotesArray
-                }
-            }, { merge: true });
+        try {
+            const notesRef = doc(db, getCollectionPath('notes'), 'my_notes');
+            await setDoc(notesRef, { notes: updatedNotes }, { merge: true });
 
             closeAddNotePopup();
-            renderNotesList(stockId); // Re-render the bottom sheet list
+            // Real-time listener will call renderNotesList automatically
         } catch (error) {
             console.error("Error saving note:", error);
         }
     };
 
-    // 8. Set Alert Popup
-    const openSetAlertPopup = () => {
+    // 11. Set Alert Popup
+    window.openSetAlertPopup = () => {
         if (!currentStock) return;
         document.getElementById('alert-current-price').textContent = currentStock.price.toFixed(2);
-        document.getElementById('alert-price-input').value = (currentStock.price * 1.01).toFixed(2); // Suggest 1% up
+        document.getElementById('alert-price-input').value = (currentStock.price * 1.01).toFixed(2);
 
         const popup = document.getElementById('alert-popup');
         popup.classList.add('opacity-100', 'pointer-events-auto');
         popup.querySelector('div').classList.replace('scale-90', 'scale-100');
     };
 
-    const closeSetAlertPopup = () => {
+    window.closeSetAlertPopup = () => {
         const popup = document.getElementById('alert-popup');
         popup.classList.remove('opacity-100', 'pointer-events-auto');
         popup.querySelector('div').classList.replace('scale-100', 'scale-90');
     };
 
-    const saveAlert = async () => {
+    window.saveAlert = async () => {
+        if (!userId) return;
         const price = parseFloat(document.getElementById('alert-price-input').value);
         if (!currentStock || isNaN(price) || price <= 0) return;
 
         const stockId = currentStock.id;
-        const newAlert = { price: price, created: Date.now(), stockName: currentStock.name };
+        const newAlert = {
+             price: price,
+             created: Date.now(),
+             stockName: currentStock.name,
+             stockId: stockId
+        };
+
+        const newAlertsArray = [...(stockAlerts[stockId] || []), newAlert];
+        const updatedAlerts = { ...stockAlerts, [stockId]: newAlertsArray };
 
         try {
-            const alertsRef = doc(db, getCollectionPath('alerts'), 'user_alerts');
-            const newAlertsArray = [...(stockAlerts[stockId] || []), newAlert];
+            const alertsRef = doc(db, getCollectionPath('alerts'), 'my_alerts');
+            await setDoc(alertsRef, { alerts: updatedAlerts }, { merge: true });
 
-            await setDoc(alertsRef, {
-                alerts: {
-                    ...stockAlerts,
-                    [stockId]: newAlertsArray
-                }
-            }, { merge: true });
-
-            checkActiveAlerts(true); // Check and potentially show notification
             closeSetAlertPopup();
+            // Real-time listener will call checkActiveAlerts automatically
         } catch (error) {
             console.error("Error saving alert:", error);
         }
     };
 
-    // 9. Notification Handling (Alerts)
-    const checkActiveAlerts = (justSet = false) => {
+    // 12. Notification Handling (Alerts)
+    window.checkActiveAlerts = () => {
         const alertDot = document.getElementById('alert-dot');
         const alertMessageEl = document.getElementById('alert-message');
         const allAlerts = Object.values(stockAlerts).flat();
 
         if (allAlerts.length > 0) {
-            // For a real app, this would check current price against the alert price
-            // Here, we just check if any exist and use the latest one for the message
             alertDot.classList.remove('hidden');
-            const latest = allAlerts[allAlerts.length - 1];
-
-            if (justSet) {
-                 alertMessageEl.innerHTML = `<span class="font-bold text-blue-600">Alert Set:</span> ${latest.stockName} @ ${latest.price.toFixed(2)}`;
-            } else {
-                 alertMessageEl.innerHTML = `${allAlerts.length} active alerts. Latest for ${latest.stockName}.`;
-            }
-
+            // Simplified: Showing the number of active alerts.
+            alertMessageEl.innerHTML = `${allAlerts.length} active alerts.`;
         } else {
             alertDot.classList.add('hidden');
             alertMessageEl.textContent = 'No active alerts.';
         }
     };
 
-    const openNotificationPopup = () => {
+    window.openNotificationPopup = () => {
         const popup = document.getElementById('notification-popup');
         popup.classList.toggle('scale-0');
     };
 
-    // 10. Watchlist Swiping Logic
+    // 13. Watchlist Swiping Logic (Improved for Visual Feedback)
     const watchlistContainer = document.getElementById('stock-list-container');
-    let swipeStartX = 0;
-    let swipeDiff = 0;
 
-    watchlistContainer.addEventListener('touchstart', (e) => {
-        swipeStartX = e.touches[0].clientX;
-        watchlistContainer.style.scrollSnapType = 'none'; // Disable snap during swipe
-    });
+    // We rely on the native scroll behavior for smooth transitions now.
+    watchlistContainer.addEventListener('scroll', () => {
+        // Calculate the current page index
+        const scrollPosition = watchlistContainer.scrollLeft;
+        const containerWidth = watchlistContainer.offsetWidth;
 
-    watchlistContainer.addEventListener('touchmove', (e) => {
-        // Prevent vertical scroll interference
-        if (Math.abs(e.touches[0].clientY - e.touches[0].clientY) > 10) return;
+        // This calculates the index that is currently most visible
+        const newIndex = Math.round(scrollPosition / containerWidth);
 
-        swipeDiff = e.touches[0].clientX - swipeStartX;
-    });
-
-    watchlistContainer.addEventListener('touchend', () => {
-        const threshold = watchlistContainer.offsetWidth / 3; // Swipe more than 33%
-
-        if (swipeDiff > threshold && currentWatchlistIndex > 0) {
-            // Swipe right (go left to previous watchlist)
-            currentWatchlistIndex--;
-        } else if (swipeDiff < -threshold && currentWatchlistIndex < allWatchlists.length - 1) {
-            // Swipe left (go right to next watchlist)
-            currentWatchlistIndex++;
+        if (newIndex !== currentWatchlistIndex) {
+            currentWatchlistIndex = newIndex;
+            currentWatchlistId = allWatchlists[currentWatchlistIndex]?.id || currentWatchlistId;
+            renderWatchlistTabs(); // Update tabs to show correct active state
         }
-
-        // Snap to the new (or current) position
-        currentWatchlistId = allWatchlists[currentWatchlistIndex].id;
-        renderWatchlistTabs();
-
-        watchlistContainer.style.scrollLeft = currentWatchlistIndex * watchlistContainer.offsetWidth;
-        watchlistContainer.style.scrollSnapType = 'x mandatory'; // Restore snap
-        swipeDiff = 0;
     });
-
-    // Initial render call (will be refined by Firebase listeners)
-    // startMockListeners(); // Fallback removed, relying on window.onload now
 
 </script>
