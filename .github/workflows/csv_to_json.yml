@@ -1,0 +1,41 @@
+name: Convert marketdata.csv → marketdata.json
+
+
+on:
+push:
+paths:
+- "marketdata.csv"
+schedule:
+# daily at 03:40 PM IST -> 10:10 UTC
+- cron: '10 10 * * *'
+workflow_dispatch: {}
+
+
+jobs:
+convert:
+runs-on: ubuntu-latest
+
+
+steps:
+- name: Checkout repository
+uses: actions/checkout@v4
+
+
+- name: Setup Python
+uses: actions/setup-python@v4
+with:
+python-version: '3.x'
+
+
+- name: Run CSV → JSON converter
+run: |
+python csv_to_json.py
+
+
+- name: Commit and push JSON (if changed)
+run: |
+git config user.name "github-actions[bot]"
+git config user.email "actions@github.com"
+git add marketdata.json || true
+git commit -m "Update marketdata.json from marketdata.csv on $(date -u +'%Y-%m-%d %H:%M:%SZ')" || echo "No changes to commit"
+git push
